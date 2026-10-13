@@ -4,23 +4,12 @@ FROM python:3.9-slim
 # Répertoire de travail
 WORKDIR /app
 
-# Installation des dépendances système + TA-Lib C Library
-# On télécharge et compile TA-Lib avant d'installer les requirements Python
+# Dépendances système minimales (TA-Lib C retiré : inutilisé, RSI/MA calculés avec pandas)
 RUN apt-get update && apt-get install -y \
     gcc \
     build-essential \
     python3-dev \
-    wget \
-    tar \
-    && rm -rf /var/lib/apt/lists/* \
-    && wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz \
-    && tar -xzf ta-lib-0.4.0-src.tar.gz \
-    && cd ta-lib/ \
-    && ./configure --prefix=/usr \
-    && make \
-    && make install \
-    && cd .. \
-    && rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
+    && rm -rf /var/lib/apt/lists/*
 
 # Copie et installation des requirements
 COPY requirements.txt .

@@ -91,7 +91,7 @@ def get_history(symbol):
         current_price = None
         if source == 'yahoo':
             import yfinance as yf
-            yahoo_map = {'GOLD': 'GC=F', 'EURUSD': 'EURUSD=X', 'SP500': '^GSPC'}
+            yahoo_map = {'GOLD': 'GC=F', 'EURUSD': 'EURUSD=X', 'SP500': '^GSPC', 'IXIC': '^IXIC', 'SPY': 'SPY', 'AAPL': 'AAPL', 'MSFT': 'MSFT'}
             ticker = yahoo_map.get(symbol, symbol)
             df = yf.download(ticker, period='6mo', interval='1d', progress=False, auto_adjust=True)
             if df is None or len(df) == 0:

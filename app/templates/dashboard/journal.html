@@ -141,7 +141,7 @@
     const s = r.dataset.symbol;
     (bySym[s] = bySym[s] || []).push(r);
   });
-  const CRYPTO = Object.keys(bySym).filter(s => !['GOLD','EURUSD','SP500'].includes(s));
+  const CRYPTO = Object.keys(bySym).filter(s => !['GOLD','EURUSD','SP500','IXIC','SPY','AAPL','MSFT'].includes(s));
   CRYPTO.forEach(sym => {
     const clean = sym.replace('/','').toLowerCase();
     try {

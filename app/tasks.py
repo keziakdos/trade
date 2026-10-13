@@ -53,6 +53,10 @@ YAHOO_ASSETS = {
     'GOLD': {'ticker': 'GC=F', 'asset_type': 'commodity'},
     'EURUSD': {'ticker': 'EURUSD=X', 'asset_type': 'forex'},
     'SP500': {'ticker': '^GSPC', 'asset_type': 'indice'},
+    'IXIC': {'ticker': '^IXIC', 'asset_type': 'indice'},
+    'SPY': {'ticker': 'SPY', 'asset_type': 'indice'},
+    'AAPL': {'ticker': 'AAPL', 'asset_type': 'action'},
+    'MSFT': {'ticker': 'MSFT', 'asset_type': 'action'},
 }
 
 def fetch_yahoo_df(ticker, interval='1d', period='2y'):

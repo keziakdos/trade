@@ -118,11 +118,12 @@
                         <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="text-xs text-gray-500 uppercase">Portefeuille</label>
-                            <select name="portfolio_id" class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-rwa-blue outline-none">
-                                {% for pf in portfolios %}
-                                <option value="{{ pf.id }}">{{ pf.name }} (${{ "{:,.0f}".format(pf.initial_balance) }})</option>
+                            <select name="portfolio_id" id="portfolio-select" class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-rwa-blue outline-none">
+                                {% for s in pf_stats %}
+                                <option value="{{ s.pf.id }}" data-equity="{{ s.equity }}" data-pnl="{{ s.pnl_total }}">{{ s.pf.name }} — éq. ${{ "{:,.2f}".format(s.equity) }}</option>
                                 {% endfor %}
                             </select>
+                            <div id="pf-hint" class="text-[11px] text-gray-500 mt-1"></div>
                         </div>
                         <div>
                             <label class="text-xs text-gray-500 uppercase">Actif</label>
@@ -384,6 +385,19 @@
         document.getElementById(id).addEventListener('input', updateSimPreview);
     });
     setTimeout(updateSimPreview, 500);
+
+    // 6. Rappel du portefeuille sélectionné (équité live du menu)
+    function updatePfHint() {
+        const sel = document.getElementById('portfolio-select');
+        const hint = document.getElementById('pf-hint');
+        if (!sel || !hint || !sel.selectedOptions.length) return;
+        const opt = sel.selectedOptions[0];
+        const eq = parseFloat(opt.dataset.equity || '0'), pnl = parseFloat(opt.dataset.pnl || '0');
+        hint.innerHTML = 'Équité : <span class="font-mono ' + (pnl >= 0 ? 'text-green-400' : 'text-red-400') + '">$' +
+            eq.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}) + ' (' + (pnl>=0?'+':'') + pnl.toFixed(2) + '$)</span> — la simulation sera rattachée à ce portefeuille.';
+    }
+    document.getElementById('portfolio-select').addEventListener('change', updatePfHint);
+    setTimeout(updatePfHint, 500);
 </script>
 
 

@@ -8,76 +8,53 @@
             <a href="{{ url_for('dashboard.index') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Dashboard</a>
             <a href="{{ url_for('dashboard.journal') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Journal</a>
             <a href="{{ url_for('dashboard.strategies') }}" class="flex items-center px-4 py-2 text-white bg-rwa-blue/20 border-r-2 border-rwa-blue rounded-l-md">Stratégies</a>
+            <a href="{{ url_for('dashboard.news') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Actualités</a>
             <a href="{{ url_for('dashboard.settings') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Paramètres</a>
         </nav>
     </aside>
 
     <div class="flex-1 p-6 space-y-8">
-        
         <div>
-            <h1 class="text-2xl font-bold text-white mb-6">Bibliothèque de Stratégies</h1>
+            <h1 class="text-2xl font-bold text-white mb-2">Bibliothèque de Stratégies</h1>
+            <p class="text-xs text-gray-500 mb-6">Choisie dans le simulateur, la stratégie remplit automatiquement SL/TP — le trade garde son nom pour les stats V2.</p>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
+                {% for st in strategies %}
                 <div class="bg-rwa-card rounded-xl border border-gray-800 p-6">
-                    <div class="flex justify-between items-start mb-4">
-                        <h3 class="text-xl font-bold text-white">🌊 Le Suivi de Tendance (Trend Following)</h3>
-                        <span class="bg-green-900 text-green-200 text-xs px-2 py-1 rounded">Débutant</span>
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="text-xl font-bold text-white">{{ st.name }}</h3>
+                        <span class="{{ 'bg-green-900 text-green-200' if st.level=='Débutant' else 'bg-yellow-900 text-yellow-200' }} text-xs px-2 py-1 rounded">{{ st.level }}</span>
                     </div>
-                    <p class="text-gray-400 text-sm mb-4">
-                        "The Trend is your Friend". Cette stratégie consiste à ne jamais trader contre le courant dominant. C'est la plus sûre pour débuter.
-                    </p>
-                    <div class="bg-gray-900 p-4 rounded border border-gray-700">
-                        <h4 class="text-rwa-blue font-bold text-sm mb-2">Checklist d'Entrée :</h4>
-                        <ul class="space-y-2 text-sm text-gray-300 list-disc list-inside">
-                            <li>Le prix est au-dessus de la Moyenne Mobile 200 (MA200).</li>
-                            <li>Le prix fait un "repli" (pullback) vers une zone de support.</li>
-                            <li>Le RSI n'est pas en surachat (>70).</li>
-                            <li>Une bougie verte "engloutissante" confirme la reprise.</li>
-                        </ul>
+                    <div class="flex gap-2 mb-3 text-xs font-mono">
+                        <span class="{{ 'text-green-400' if st.side=='LONG' else 'text-red-400' }} font-bold">{{ st.side }}</span>
+                        <span class="text-red-400">SL −{{ st.sl_pct }}%</span>
+                        <span class="text-green-400">TP +{{ st.tp_pct }}%</span>
+                        {% if st.user_id %}<span class="text-rwa-blue">· perso</span>{% else %}<span class="text-gray-500">· système</span>{% endif %}
                     </div>
+                    <p class="text-gray-400 text-sm">{{ st.description }}</p>
                 </div>
-
-                <div class="bg-rwa-card rounded-xl border border-gray-800 p-6">
-                    <div class="flex justify-between items-start mb-4">
-                        <h3 class="text-xl font-bold text-white">💥 Le Breakout (Cassure)</h3>
-                        <span class="bg-yellow-900 text-yellow-200 text-xs px-2 py-1 rounded">Intermédiaire</span>
-                    </div>
-                    <p class="text-gray-400 text-sm mb-4">
-                        Capturer une explosion de prix après une phase de compression (Range). Potentiel de gain rapide mais risque de "faux départ".
-                    </p>
-                    <div class="bg-gray-900 p-4 rounded border border-gray-700">
-                        <h4 class="text-rwa-yellow font-bold text-sm mb-2">Checklist d'Entrée :</h4>
-                        <ul class="space-y-2 text-sm text-gray-300 list-disc list-inside">
-                            <li>Le prix est bloqué sous une résistance depuis plusieurs jours.</li>
-                            <li>Les bougies deviennent de plus en plus petites (compression).</li>
-                            <li>Une bougie casse franchement la ligne avec du <strong>VOLUME</strong>.</li>
-                            <li>Ne jamais acheter si le prix a déjà pris +5% en une seule bougie (trop tard).</li>
-                        </ul>
-                    </div>
-                </div>
+                {% endfor %}
             </div>
         </div>
 
-        <div>
-            <h2 class="text-xl font-bold text-white mb-4">Actualités Crypto & Économiques</h2>
-            <div class="bg-rwa-card rounded-xl border border-gray-800 overflow-hidden h-[500px]">
-                <div class="tradingview-widget-container">
-                  <div class="tradingview-widget-container__widget"></div>
-                  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-timeline.js" async>
-                  {
-                  "feedMode": "all_symbols",
-                  "isTransparent": true,
-                  "displayMode": "regular",
-                  "width": "100%",
-                  "height": "500",
-                  "colorTheme": "dark",
-                  "locale": "fr"
-                }
-                  </script>
-                </div>
-                </div>
+        <div class="bg-rwa-card rounded-xl border border-gray-800 p-6">
+            <h2 class="text-lg font-bold text-white mb-4">Ajouter ma stratégie (V2)</h2>
+            <form action="{{ url_for('dashboard.strategies') }}" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input type="text" name="name" placeholder="Nom (ex. Breakout 15m)" maxlength="80" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                <input type="text" name="description" placeholder="Description / règles d'entrée" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                <select name="side" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                    <option value="LONG">LONG (hausse)</option>
+                    <option value="SHORT">SHORT (baisse)</option>
+                </select>
+                <select name="level" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                    <option>Débutant</option>
+                    <option>Intermédiaire</option>
+                    <option>Avancé</option>
+                </select>
+                <input type="number" step="any" min="0.1" name="sl_pct" placeholder="SL % (ex. 2)" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                <input type="number" step="any" min="0.1" name="tp_pct" placeholder="TP % (ex. 4)" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                <button class="md:col-span-2 bg-rwa-blue hover:bg-sky-600 text-white font-bold py-2 rounded transition">Ajouter — utilisable aussitôt dans le simulateur</button>
+            </form>
         </div>
-
     </div>
 </div>
 {% endblock %}

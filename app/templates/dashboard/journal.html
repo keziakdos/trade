@@ -52,6 +52,7 @@
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded {{ 'bg-green-900 text-green-400' if dir=='LONG' else 'bg-red-900 text-red-400' }}">{{ 'LONG ↑' if dir=='LONG' else 'SHORT ↓' }}</span>
                             <div class="text-xs text-gray-600 mt-1">{{ trade.entry_date.strftime('%d/%m %H:%M') }} · {{ trade.risk_reward }}R</div>
                             {% if trade.portfolio %}<div class="text-[10px] text-rwa-blue mt-0.5">◈ {{ trade.portfolio.name }}</div>{% endif %}
+                            {% if trade.strategy_tag %}<div class="text-[10px] text-yellow-400/80 mt-0.5">📋 {{ trade.strategy_tag }}</div>{% endif %}
                         </td>
                         <td class="px-4 py-4 font-mono text-xs">
                             <div class="text-white">E ${{ "{:,.2f}".format(trade.entry_price) }}</div>

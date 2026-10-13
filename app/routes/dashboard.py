@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, abort
 from flask_login import login_required, current_user
-from app.models import MarketStatus, TradeSimulation, TradeNote, Portfolio, db
+from app.models import MarketStatus, TradeSimulation, TradeNote, Portfolio, Strategy, db
 import json
 from datetime import datetime # Assurez-vous d'avoir cet import en haut du fichier
 import ccxt
@@ -17,6 +17,23 @@ def get_or_create_default_portfolio():
         db.session.add(pf)
         db.session.commit()
     return pf
+
+def get_available_strategies():
+    """Stratégies système + celles de l'utilisateur (V2). Seed identique à la page Stratégies."""
+    if Strategy.query.filter_by(user_id=None).count() == 0:
+        db.session.add_all([
+            Strategy(user_id=None, name='Suivi de Tendance (Trend Following)', level='Débutant',
+                     side='LONG', sl_pct=2.0, tp_pct=4.0,
+                     description="The Trend is your Friend : on ne trade jamais contre le courant dominant. Entrée sur repli vers support, prix au-dessus de la MA200, RSI pas en surachat (>70), bougie verte engloutissante."),
+            Strategy(user_id=None, name='Breakout (Cassure)', level='Intermédiaire',
+                     side='LONG', sl_pct=3.0, tp_pct=6.0,
+                     description="Explosion de prix après compression (range). Entrée sur cassure franche avec VOLUME. Ne jamais acheter après +5% en une bougie (trop tard)."),
+            Strategy(user_id=None, name='Rejet de Résistance (Range Short)', level='Intermédiaire',
+                     side='SHORT', sl_pct=2.0, tp_pct=4.0,
+                     description="Vente sur rejet d'une résistance en range : prix bloqué sous résistance, mèche haute de rejet, retour vers le bas du range."),
+        ])
+        db.session.commit()
+    return Strategy.query.filter((Strategy.user_id == None) | (Strategy.user_id == current_user.id)).order_by(Strategy.id).all()
 
 @dashboard_bp.route('/dashboard')
 @login_required
@@ -59,7 +76,8 @@ def index():
                          recent_trades=recent_trades,
                          btc_price=current_btc_price,
                          portfolios=portfolios,
-                         pf_stats=pf_stats)
+                         pf_stats=pf_stats,
+                         strategies=get_available_strategies())
 
 
 @dashboard_bp.route('/portfolios', methods=['POST'])
@@ -190,9 +208,21 @@ def simulate_trade():
         pf_id = default_pf.id
     pf = Portfolio.query.filter_by(id=pf_id, user_id=current_user.id).first() or default_pf
 
+    # Stratégie liée (aligne simulateur ↔ page Stratégies, champ prêt pour stats V2)
+    strategy_tag = None
+    try:
+        st_id = int(request.form.get('strategy_id') or 0) or None
+    except (TypeError, ValueError):
+        st_id = None
+    if st_id:
+        st = Strategy.query.filter(((Strategy.user_id == None) | (Strategy.user_id == current_user.id)), Strategy.id == st_id).first()
+        if st:
+            strategy_tag = st.name
+
     sim = TradeSimulation(
         user_id=current_user.id,
         portfolio_id=pf.id,
+        strategy_tag=strategy_tag,
         symbol=symbol,
         direction=direction,
         entry_price=entry,
@@ -242,11 +272,92 @@ def journal():
 
 
 
-@dashboard_bp.route('/strategies')
+NEWS_FEEDS = [
+    ('CoinDesk', 'https://www.coindesk.com/arc/outboundfeeds/rss/'),
+    ('Cointelegraph', 'https://cointelegraph.com/rss'),
+    ('Decrypt', 'https://decrypt.co/feed'),
+    ('Marchés (Investing)', 'https://www.investing.com/rss/news_25.rss'),
+]
+_news_cache = {'ts': None, 'items': [], 'ok': False}
+
+def fetch_news(force=False):
+    """Agrège les RSS crypto/éco (cache 20 min, chaque flux en erreur est ignoré)."""
+    import time as _time
+    now = _time.time()
+    if not force and _news_cache['ts'] and now - _news_cache['ts'] < 1200:
+        return _news_cache['items'], _news_cache['ok']
+    import feedparser
+    import requests as _rq
+    items = []
+    ok = False
+    for source, url in NEWS_FEEDS:
+        try:
+            r = _rq.get(url, headers={'User-Agent': 'Mozilla/5.0 (RwaTrade learning)'}, timeout=12)
+            feed = feedparser.parse(r.content)
+            for e in feed.entries[:8]:
+                img = None
+                try:
+                    mc = getattr(e, 'media_content', None)
+                    if mc: img = mc[0].get('url')
+                    if not img:
+                        mt = getattr(e, 'media_thumbnail', None)
+                        if mt: img = mt[0].get('url')
+                    if not img:
+                        for enc in getattr(e, 'enclosures', []):
+                            if 'image' in (enc.get('type') or '') and enc.get('href'):
+                                img = enc['href']; break
+                except Exception:
+                    img = None
+                pub = getattr(e, 'published', '') or getattr(e, 'updated', '')
+                items.append({
+                    'source': source,
+                    'title': getattr(e, 'title', '(sans titre)'),
+                    'link': getattr(e, 'link', '#'),
+                    'published': pub,
+                    'summary': (getattr(e, 'summary', '') or '')[:220],
+                    'image': img,
+                    'sortkey': str(getattr(e, 'published_parsed', '') or pub),
+                })
+            ok = True
+        except Exception as ex:
+            print(f"News {source} ignoré : {ex}")
+            continue
+    items.sort(key=lambda x: x['sortkey'], reverse=True)
+    _news_cache.update({'ts': now, 'items': items, 'ok': ok})
+    return items, ok
+
+
+@dashboard_bp.route('/news')
+@login_required
+def news():
+    items, ok = fetch_news()
+    return render_template('dashboard/news.html', items=items, feeds_ok=ok)
+
+
+@dashboard_bp.route('/strategies', methods=['GET', 'POST'])
 @login_required
 def strategies():
-    # Affiche la page statique
-    return render_template('dashboard/strategies.html')
+    # Ajout V2 : l'utilisateur crée ses propres stratégies (système + siennes listées)
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()[:80]
+        level = request.form.get('level') or 'Débutant'
+        side = request.form.get('side') or 'LONG'
+        try:
+            sl = float(request.form.get('sl_pct') or 0)
+            tp = float(request.form.get('tp_pct') or 0)
+        except (TypeError, ValueError):
+            sl, tp = 0, 0
+        desc = (request.form.get('description') or '').strip()
+        if not name or sl <= 0 or tp <= 0 or side not in ('LONG', 'SHORT'):
+            flash("Stratégie invalide : nom + sens + SL/TP % positifs requis.", "error")
+        else:
+            db.session.add(Strategy(user_id=current_user.id, name=name, level=level,
+                                    side=side, sl_pct=sl, tp_pct=tp, description=desc))
+            db.session.commit()
+            flash(f"Stratégie '{name}' ajoutée — utilisable dans le simulateur.", "success")
+        return redirect(url_for('dashboard.strategies'))
+    strategies = get_available_strategies()
+    return render_template('dashboard/strategies.html', strategies=strategies)
 
 
 
@@ -261,6 +372,12 @@ def close_trade(trade_id):
     # Sécurité : vérifier que le trade appartient bien à l'utilisateur
     if trade.user_id != current_user.id:
         abort(403)
+
+    # Clôture définitive : un trade déjà clôturé ne peut pas être re-clôturé
+    # (ni P&L recompté, ni note dupliquée) — ses notes restent consultables/ajoutables
+    if trade.status == 'closed':
+        flash(f"Trade déjà clôturé le {trade.close_date.strftime('%d/%m/%Y') if trade.close_date else ''} ({trade.outcome}, {trade.pnl_usd}$). Notes conservées.", "error")
+        return redirect(url_for('dashboard.journal'))
 
     try:
         exit_price = float(request.form.get('exit_price'))

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex min-h-screen -mt-6">
+    <aside class="w-64 hidden md:block bg-rwa-card border-r border-gray-800 p-6">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Menu</h2>
+        <nav class="mt-4 space-y-2">
+            <a href="{{ url_for('dashboard.index') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Dashboard</a>
+            <a href="{{ url_for('dashboard.journal') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Journal</a>
+            <a href="{{ url_for('dashboard.strategies') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Stratégies</a>
+            <a href="{{ url_for('dashboard.news') }}" class="flex items-center px-4 py-2 text-white bg-rwa-blue/20 border-r-2 border-rwa-blue rounded-l-md">Actualités</a>
+            <a href="{{ url_for('dashboard.settings') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Paramètres</a>
+        </nav>
+    </aside>
+
+    <div class="flex-1 p-6">
+        <div class="flex items-center justify-between mb-2">
+            <h1 class="text-2xl font-bold text-white">Actualités <span class="text-sm font-normal text-gray-500">Crypto & Économie</span></h1>
+            <span class="text-[11px] {{ 'text-green-500' if feeds_ok else 'text-yellow-500' }}">{{ 'Flux à jour' if feeds_ok else 'Hors-ligne — réessaie plus tard' }}</span>
+        </div>
+        <p class="text-xs text-gray-500 mb-6">CoinDesk · Cointelegraph · Decrypt · Investing — informatif uniquement, pas un conseil d'investissement.</p>
+
+        {% if items %}
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {% for n in items %}
+            <a href="{{ n.link }}" target="_blank" rel="noopener" class="group bg-rwa-card rounded-xl border border-gray-800 overflow-hidden hover:border-rwa-blue transition shadow-lg flex flex-col">
+                {% if n.image %}
+                <div class="h-40 overflow-hidden bg-gray-900">
+                    <img src="{{ n.image }}" alt="" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" onerror="this.parentElement.style.display='none'">
+                </div>
+                {% else %}
+                <div class="h-24 rwa-gradient flex items-center justify-center">
+                    <span class="text-3xl font-black text-white/70">{{ n.source[0] }}</span>
+                </div>
+                {% endif %}
+                <div class="p-4 flex flex-col flex-1">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-gray-800 text-rwa-blue">{{ n.source }}</span>
+                        <span class="text-[10px] text-gray-600">{{ n.published[:16] }}</span>
+                    </div>
+                    <h3 class="font-bold text-white text-sm leading-snug mb-2 group-hover:text-rwa-blue transition">{{ n.title }}</h3>
+                    <p class="text-xs text-gray-500 line-clamp-3">{{ n.summary | striptags }}</p>
+                    <span class="text-xs text-rwa-blue mt-3">Lire l'article →</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-rwa-card rounded-xl border border-gray-800 p-10 text-center text-gray-500">
+            Impossible de charger les flux pour l'instant. <a href="{{ url_for('dashboard.news') }}" class="text-rwa-blue hover:underline">Réessayer</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

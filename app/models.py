@@ -108,6 +108,21 @@ class TradeNote(db.Model):
     trade = db.relationship('TradeSimulation', backref=db.backref('all_notes', lazy=True, cascade='all, delete-orphan', order_by='TradeNote.created_at'))
 
 
+class Strategy(db.Model):
+    """Stratégie pédagogique (V2 : l'utilisateur peut ajouter les siennes). user_id NULL = système."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    name = db.Column(db.String(80), nullable=False)
+    level = db.Column(db.String(20), default='Débutant') # Débutant / Intermédiaire / Avancé
+    side = db.Column(db.String(10), nullable=False, default='LONG') # LONG / SHORT
+    sl_pct = db.Column(db.Float, nullable=False, default=2.0) # % stop loss
+    tp_pct = db.Column(db.Float, nullable=False, default=4.0) # % take profit
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref=db.backref('strategies', lazy=True, cascade='all, delete-orphan'))
+
+
 
 
 

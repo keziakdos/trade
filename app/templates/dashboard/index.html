@@ -176,12 +176,16 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="text-xs text-red-400 uppercase">Stop Loss ($)</label>
-                                <input type="number" step="any" name="sl" id="sl-input" required class="w-full bg-gray-800 border border-red-900/50 rounded p-2 text-white font-mono">
+                                <input type="number" step="any" name="sl" id="sl-input" required placeholder="ex. 63500" class="w-full bg-gray-800 border border-red-900/50 rounded p-2 text-white font-mono">
                             </div>
                             <div>
                                 <label class="text-xs text-green-400 uppercase">Take Profit ($)</label>
-                                <input type="number" step="any" name="tp" id="tp-input" required class="w-full bg-gray-800 border border-green-900/50 rounded p-2 text-white font-mono">
+                                <input type="number" step="any" name="tp" id="tp-input" required placeholder="ex. 70000" class="w-full bg-gray-800 border border-green-900/50 rounded p-2 text-white font-mono">
                             </div>
+                        </div>
+                        <div class="flex gap-2 text-[11px]">
+                            <button type="button" id="suggest-long" class="flex-1 bg-green-900/40 hover:bg-green-900/70 border border-green-800 rounded px-2 py-1.5 text-green-300">Suggérer LONG −2% / +4%</button>
+                            <button type="button" id="suggest-short" class="flex-1 bg-red-900/40 hover:bg-red-900/70 border border-red-800 rounded px-2 py-1.5 text-red-300">Suggérer SHORT +2% / −4%</button>
                         </div>
 
                         <div id="sim-preview" class="text-xs bg-gray-900/60 border border-gray-700 rounded p-3 space-y-1">
@@ -452,6 +456,24 @@
     document.getElementById('capital-input').addEventListener('input', updateCapitalHint);
     document.getElementById('portfolio-select').addEventListener('change', updateCapitalHint);
     setTimeout(updateCapitalHint, 500);
+
+    // 7. Suggestions SL/TP déduites de l'entrée (débutants : évite les rejets "incohérent")
+    function suggestLevels(isLong) {
+        const e = parseFloat(document.getElementById('entry-input').value);
+        if (!isFinite(e) || e <= 0) {
+            const hint = document.getElementById('pv-hint');
+            hint.classList.remove('hidden'); document.getElementById('pv-result').classList.add('hidden');
+            hint.textContent = 'D\u2019abord le prix d\u2019entrée (auto via le live ou manuel), puis je propose le SL/TP.';
+            document.getElementById('entry-input').focus();
+            return;
+        }
+        const r2 = v => Math.round(v * 100) / 100;
+        if (isLong) { document.getElementById('sl-input').value = r2(e * 0.98); document.getElementById('tp-input').value = r2(e * 1.04); }
+        else { document.getElementById('sl-input').value = r2(e * 1.02); document.getElementById('tp-input').value = r2(e * 0.96); }
+        updateSimPreview();
+    }
+    document.getElementById('suggest-long').addEventListener('click', () => suggestLevels(true));
+    document.getElementById('suggest-short').addEventListener('click', () => suggestLevels(false));
 </script>
 
 

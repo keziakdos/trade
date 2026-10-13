@@ -49,7 +49,7 @@
                 <div class="bg-gray-900/60 border border-gray-700 rounded-lg p-3">
                     <div class="font-bold text-white">{{ s.pf.name }}</div>
                     <div class="font-mono text-lg {{ 'text-green-400' if s.equity >= s.pf.initial_balance else 'text-red-400' }}">${{ "{:,.2f}".format(s.equity) }}</div>
-                    <div class="text-[11px] text-gray-500">Init ${{ "{:,.0f}".format(s.pf.initial_balance) }} · P&L {{ "{:+.2f}".format(s.pnl_total) }}$ · {{ s.n_closed }}/{{ s.n_trades }} clôturés · WR {{ s.winrate }}% · {{ s.n_open }} ouvert(s) (${{ "{:,.2f}".format(s.open_engaged) }} engagés)</div>
+                    <div class="text-[11px] text-gray-500">Init ${{ "{:,.0f}".format(s.pf.initial_balance) }} · P&L {{ "{:+.2f}".format(s.pnl_total) }}$ · {{ s.n_closed }}/{{ s.n_trades }} clôturés · WR {{ s.winrate }}% · {{ s.get('n_open', 0) }} ouvert(s) · Dispo ${{ "{:,.2f}".format(s.get('available', s.equity)) }} <span class="text-gray-600">(éq. − ouverts)</span></div>
                 </div>
                 {% endfor %}
             </div>
@@ -437,8 +437,7 @@
         const avail = eq - open;
         const rest = avail - cap;
         hint.innerHTML = 'Reste après ce trade : <span class="font-mono font-bold ' + (rest >= 0 ? 'text-green-400' : 'text-red-400') + '">$' + rest.toFixed(2) + '</span>' +
-            ' <span class="text-gray-600">(éq. $' + eq.toFixed(2) + ' − ouverts $' + open.toFixed(2) + ' − ce trade $' + cap.toFixed(2) + ')</span>' +
-            (rest < 0 ? ' <span class="text-yellow-400">⚠️ dépasse le disponible — simulé quand même (fictif).</span>' : '');
+            (rest < 0 ? ' <span class="text-yellow-400">⚠️ (fictif — voir détail dans le portefeuille).</span>' : '');
     }
     document.querySelectorAll('.pct-btn').forEach(btn => {
         btn.addEventListener('click', () => {

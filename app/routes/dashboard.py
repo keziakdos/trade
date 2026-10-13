@@ -30,13 +30,18 @@ def index():
     pf_stats = []
     for pf in portfolios:
         closed = [t for t in pf.trades if t.status == 'closed' and t.pnl_usd]
+        open_trades = [t for t in pf.trades if t.status == 'open']
         wins = sum(1 for t in pf.trades if t.outcome == 'WIN')
+        open_engaged = round(sum(t.position_size_usd or 0 for t in open_trades), 2)
         pf_stats.append({
             'pf': pf,
             'equity': pf.equity(),
             'pnl_total': round(sum(t.pnl_usd for t in closed), 2),
             'n_trades': len(pf.trades),
             'n_closed': len(closed),
+            'n_open': len(open_trades),
+            'open_engaged': open_engaged,
+            'available': round(pf.equity() - open_engaged, 2),
             'winrate': round(wins / len(closed) * 100, 1) if closed else 0,
         })
 

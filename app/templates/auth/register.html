@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-center justify-center min-h-[80vh]">
+    <div class="w-full max-w-md p-8 space-y-8 bg-rwa-card rounded-xl shadow-2xl border border-gray-800">
+        
+        <div class="text-center">
+            <h2 class="text-3xl font-bold text-white tracking-tight">Inscription</h2>
+            <p class="mt-2 text-sm text-gray-400">Rejoignez la communauté de trading rwandaise</p>
+        </div>
+
+        <form class="mt-8 space-y-6" action="{{ url_for('auth.register') }}" method="POST">
+            <div class="space-y-4">
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-300">Nom d'utilisateur</label>
+                    <input id="username" name="username" type="text" required 
+                           class="mt-1 block w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-rwa-green focus:border-transparent transition sm:text-sm">
+                </div>
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-300">Email</label>
+                    <input id="email" name="email" type="email" required 
+                           class="mt-1 block w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-rwa-green focus:border-transparent transition sm:text-sm">
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-300">Mot de passe</label>
+                    <input id="password" name="password" type="password" required 
+                           class="mt-1 block w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-rwa-green focus:border-transparent transition sm:text-sm">
+                </div>
+            </div>
+
+            <div>
+                <button type="submit" 
+                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-rwa-green hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-rwa-green transition duration-150">
+                    S'inscrire
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

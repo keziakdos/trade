@@ -1,0 +1,15 @@
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Flask-Migrate==4.0.5
+gunicorn==21.2.0
+python-dotenv==1.0.0
+ccxt>=4.0.0
+# --- FIX COMPATIBILITÉ ---
+pandas>=2.1.0
+numpy<2.0.0
+# -------------------------
+requests==2.31.0
+apscheduler==3.10.4
+ta-lib
+yfinance>=0.2.40

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RwaTrade | Kigali Capital Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        rwa: {
+                            blue: '#00A3E0',   /* Bleu Ciel Rwanda */
+                            yellow: '#FAD201', /* Jaune Soleil */
+                            green: '#20603D',  /* Vert Forêt */
+                            dark: '#0f172a',   /* Fond très sombre */
+                            card: '#1e293b'    /* Fond cartes */
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .rwa-gradient {
+            background: linear-gradient(90deg, #00A3E0 0%, #20603D 100%);
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <nav class="border-b border-gray-800 bg-rwa-card/80 backdrop-blur-md fixed w-full z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="/" class="flex-shrink-0 flex items-center gap-2">
+                        <div class="h-8 w-8 rwa-gradient rounded-tr-lg rounded-bl-lg"></div>
+                        <span class="font-bold text-xl tracking-wider text-white">RWA<span class="text-rwa-blue">TRADE</span></span>
+                    </a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    {% if current_user.is_authenticated %}
+                        <span class="text-sm text-gray-400">Compte: <span class="{{ 'text-rwa-green' if current_user.status == 'active' else 'text-rwa-yellow' }}">{{ current_user.status|upper }}</span></span>
+                        <a href="{{ url_for('auth.logout') }}" class="text-sm text-gray-300 hover:text-white">Déconnexion</a>
+                    {% else %}
+                        <a href="{{ url_for('auth.login') }}" class="text-sm text-rwa-blue hover:text-white transition">Connexion</a>
+                        <a href="{{ url_for('auth.register') }}" class="bg-rwa-blue hover:bg-sky-600 text-white px-4 py-2 rounded-md text-sm font-medium transition">Ouvrir un compte</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="mb-6 space-y-2">
+              {% for category, message in messages %}
+                <div class="p-4 rounded-md border-l-4 {{ 'border-rwa-green bg-green-900/20 text-green-200' if category == 'success' else 'border-red-500 bg-red-900/20 text-red-200' }}">
+                    {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-t border-gray-800 mt-12 py-8 bg-rwa-card">
+        <div class="text-center text-gray-500 text-sm">
+            <p>&copy; 2024 RwaTrade. Rwanda's Future Trading Platform.</p>
+            <p class="text-xs mt-2 text-gray-600">Trading involves risk. Simulator mode only.</p>
+        </div>
+    </footer>
+
+</body>
+</html>

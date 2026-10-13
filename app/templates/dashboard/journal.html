@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex min-h-screen -mt-6">
+    <aside class="w-64 hidden md:block bg-rwa-card border-r border-gray-800 p-6">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Menu</h2>
+        <nav class="mt-4 space-y-2">
+            <a href="{{ url_for('dashboard.index') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Dashboard</a>
+            <a href="{{ url_for('dashboard.journal') }}" class="flex items-center px-4 py-2 text-white bg-rwa-blue/20 border-r-2 border-rwa-blue rounded-l-md">Journal</a>
+            <a href="{{ url_for('dashboard.strategies') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Strat\u00e9gies</a>
+            <a href="{{ url_for('dashboard.settings') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Param\u00e8tres</a>
+        </nav>
+    </aside>
+    <div class="flex-1 p-6">
+        <h1 class="text-2xl font-bold text-white mb-2">Journal de Trading <span class="text-xs text-gray-500 font-normal">(montants fictifs — apprentissage)</span></h1>
+        <p class="text-xs text-gray-500 mb-6">LONG = pari hausse | SHORT = pari baisse. P&amp;L live recalcul\u00e9 c\u00f4t\u00e9 serveur au refresh, et en direct via WebSocket pour les cryptos.</p>
+        <div class="bg-rwa-card rounded-xl border border-gray-800 overflow-x-auto shadow-xl">
+            <table class="min-w-full text-left text-sm text-gray-400">
+                <thead class="bg-gray-900 text-xs uppercase font-medium text-gray-200">
+                    <tr>
+                        <th class="px-4 py-4">Paire / Direction</th>
+                        <th class="px-4 py-4">Entr\u00e9e / SL / TP</th>
+                        <th class="px-4 py-4">Prix Actuel / Sortie</th>
+                        <th class="px-4 py-4">P&amp;L live / final ($ + %)</th>
+                        <th class="px-4 py-4">Risque / Gain</th>
+                        <th class="px-4 py-4">Notes / Sentiment</th>
+                        <th class="px-4 py-4 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800">
+                    {% for trade in trades %}
+                    {% set dir = trade.direction or 'LONG' %}
+                    {% set sign = 1 if dir == 'LONG' else -1 %}
+                    <tr class="hover:bg-gray-800/50 transition align-top" data-symbol="{{ trade.symbol }}" data-entry="{{ trade.entry_price }}" data-capital="{{ trade.position_size_usd }}" data-dir="{{ dir }}">
+                        <td class="px-4 py-4">
+                            <div class="font-bold text-white">{{ trade.symbol }}</div>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded {{ 'bg-green-900 text-green-400' if dir=='LONG' else 'bg-red-900 text-red-400' }}">{{ 'LONG \u2191' if dir=='LONG' else 'SHORT \u2193' }}</span>
+                            <div class="text-xs text-gray-600 mt-1">{{ trade.entry_date.strftime('%d/%m %H:%M') }} · {{ trade.risk_reward }}R</div>
+                        </td>
+                        <td class="px-4 py-4 font-mono text-xs">
+                            <div class="text-white">E ${{ "{:,.2f}".format(trade.entry_price) }}</div>
+                            <div class="text-red-400">SL ${{ "{:,.2f}".format(trade.stop_loss) }}</div>
+                            <div class="text-green-400">TP ${{ "{:,.2f}".format(trade.take_profit) }}</div>
+                            <div class="text-gray-500">${{ "{:,.0f}".format(trade.position_size_usd) }} fictifs</div>
+                        </td>
+                        <td class="px-4 py-4 font-mono">
+                            {% if trade.status == 'closed' %}
+                                <span class="text-gray-300">${{ "{:,.2f}".format(trade.exit_price) }}</span>
+                                <div class="text-xs {{ 'text-green-500' if trade.outcome=='WIN' else 'text-red-500' }} font-bold">{{ trade.outcome }}</div>
+                            {% else %}
+                                {% set current = current_prices.get(trade.symbol) %}
+                                {% if current %}
+                                    <div class="live-price {{ 'text-green-400' if sign*(current-trade.entry_price) > 0 else 'text-red-400' }} font-bold">${{ "{:,.2f}".format(current) }}</div>
+                                    <div class="text-xs text-gray-500">BDD (refresh 15 min)</div>
+                                {% else %}
+                                    <span class="text-gray-500">Scanning...</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-4 font-bold">
+                            {% if trade.status == 'closed' %}
+                                {% set pnl_usd = trade.pnl_usd if trade.pnl_usd is not none else (sign*(trade.exit_price-trade.entry_price)/trade.entry_price*trade.position_size_usd) %}
+                                {% set pnl_pct = sign*(trade.exit_price-trade.entry_price)/trade.entry_price*100 %}
+                                <div class="{{ 'text-green-400' if pnl_usd > 0 else 'text-red-400' }}">{{ "{:+.2f}".format(pnl_usd) }}$</div>
+                                <div class="text-xs {{ 'text-green-600' if pnl_pct > 0 else 'text-red-600' }}">{{ "{:+.2f}".format(pnl_pct) }}%</div>
+                            {% else %}
+                                {% set current = current_prices.get(trade.symbol) %}
+                                {% if current %}
+                                    {% set open_pct = sign*(current-trade.entry_price)/trade.entry_price*100 %}
+                                    {% set open_usd = open_pct/100*trade.position_size_usd %}
+                                    <div class="live-pnl {{ 'text-green-400' if open_usd > 0 else 'text-red-400' }}">{{ "{:+.2f}".format(open_usd) }}$</div>
+                                    <div class="live-pnl-pct text-xs {{ 'text-green-600' if open_pct > 0 else 'text-red-600' }}">{{ "{:+.2f}".format(open_pct) }}%</div>
+                                {% else %}-{% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-4 text-xs font-mono">
+                            <div class="text-red-400/80">-{{"%.2f"|format(trade.risk_amount_usd) if trade.risk_amount_usd else "-"}} $</div>
+                            <div class="text-green-400/80">+{{"%.2f"|format(trade.reward_amount_usd) if trade.reward_amount_usd else "-"}} $</div>
+                        </td>
+                        <td class="px-4 py-4">
+                            <div class="space-y-1 max-w-xs">
+                            {% for n in trade.all_notes %}
+                                <div class="bg-gray-900/50 p-2 rounded text-xs text-gray-300 border border-gray-700/50"><span class="text-gray-500">{{ n.created_at.strftime('%d/%m %H:%M') }}</span> — {{ n.content }}</div>
+                            {% else %}
+                                {% if trade.notes %}<div class="bg-gray-900/50 p-2 rounded text-xs text-gray-300 border border-gray-700/50">{{ trade.notes }}</div>
+                                {% else %}<span class="text-gray-700 italic text-xs">Aucune note</span>{% endif %}
+                            {% endfor %}
+                            </div>
+                            <form action="{{ url_for('dashboard.add_note', trade_id=trade.id) }}" method="POST" class="flex gap-1 mt-2">
+                                <input type="text" name="content" placeholder="Note / sentiment..." class="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white" maxlength="500">
+                                <button class="bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded text-xs">+</button>
+                            </form>
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            {% if trade.status == 'open' %}
+                            <form action="{{ url_for('dashboard.close_trade', trade_id=trade.id) }}" method="POST" class="flex flex-col gap-2 items-end">
+                                <div class="flex gap-1">
+                                    <input type="number" step="any" name="exit_price" placeholder="Sortie ($)" required value="{{ current_prices.get(trade.symbol) }}" class="close-price w-24 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white">
+                                    <button type="submit" class="bg-rwa-blue hover:bg-sky-600 text-white px-3 py-1 rounded text-xs font-bold shadow">Close</button>
+                                </div>
+                                <textarea name="note" placeholder="Sentiment de cl\u00f4ture..." rows="1" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white"></textarea>
+                            </form>
+                            {% else %}
+                            <a href="{{ url_for('dashboard.delete_trade', trade_id=trade.id) }}" onclick="return confirm('Supprimer d\u00e9finitivement ?')" class="text-gray-600 hover:text-red-500 transition p-2 inline-block">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="px-4 py-8 text-center text-gray-600">Aucune simulation pour l\u2019instant. Lance-en une depuis le Dashboard.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>
+// C7 : P&L live via WebSocket Binance pour les cryptos ouvertes (Yahoo = fig\u00e9 BDD)
+(function(){
+  const rows = document.querySelectorAll('tr[data-symbol]');
+  const bySym = {};
+  rows.forEach(r => {
+    if (r.querySelector('.live-pnl') === null) return;
+    const s = r.dataset.symbol;
+    (bySym[s] = bySym[s] || []).push(r);
+  });
+  const CRYPTO = Object.keys(bySym).filter(s => !['GOLD','EURUSD','SP500'].includes(s));
+  CRYPTO.forEach(sym => {
+    const clean = sym.replace('/','').toLowerCase();
+    try {
+      const ws = new WebSocket(`wss://data-stream.binance.com/ws/${clean}@miniTicker`);
+      ws.onmessage = (ev) => {
+        const price = parseFloat(JSON.parse(ev.data).c);
+        if (!isFinite(price)) return;
+        bySym[sym].forEach(r => {
+          const entry = parseFloat(r.dataset.entry), cap = parseFloat(r.dataset.capital);
+          const sign = r.dataset.dir === 'SHORT' ? -1 : 1;
+          const pnlUsd = sign * (price - entry) / entry * cap;
+          const pnlPct = sign * (price - entry) / entry * 100;
+          const pEl = r.querySelector('.live-price'), uEl = r.querySelector('.live-pnl'), pcEl = r.querySelector('.live-pnl-pct');
+          const inp = r.querySelector('.close-price');
+          if (pEl) { pEl.textContent = '$' + price.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); pEl.className = 'live-price font-bold ' + (pnlUsd >= 0 ? 'text-green-400' : 'text-red-400'); }
+          if (uEl) { uEl.textContent = (pnlUsd>=0?'+':'') + pnlUsd.toFixed(2) + '$'; uEl.className = 'live-pnl ' + (pnlUsd >= 0 ? 'text-green-400' : 'text-red-400'); }
+          if (pcEl) { pcEl.textContent = (pnlPct>=0?'+':'') + pnlPct.toFixed(2) + '%'; }
+          if (inp && document.activeElement !== inp) inp.value = price;
+        });
+      };
+    } catch(e) { console.log('WS fail', sym, e); }
+  });
+})();
+</script>
+{% endblock %}

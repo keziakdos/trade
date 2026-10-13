@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="relative py-12 sm:py-20 border-b border-gray-800/50">
+    <div class="text-center">
+        <h1 class="text-4xl sm:text-6xl font-extrabold text-white tracking-tight">
+            Invest in <span class="text-transparent bg-clip-text bg-gradient-to-r from-rwa-blue via-rwa-yellow to-rwa-green">Rwanda's Future</span>.
+        </h1>
+        <p class="mt-4 text-xl text-gray-400 max-w-2xl mx-auto">
+            Trade with confidence. Professional Multi-Timeframe Analysis & Risk Management.
+        </p>
+        
+        <div class="mt-8 flex justify-center gap-4">
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('dashboard.index') }}" class="px-8 py-3 rounded-md bg-rwa-blue text-white font-bold hover:bg-sky-600 transition shadow-lg shadow-blue-500/20">
+                Accéder au Dashboard
+            </a>
+            {% else %}
+            <a href="{{ url_for('auth.register') }}" class="px-8 py-3 rounded-md bg-rwa-yellow text-gray-900 font-bold hover:bg-yellow-400 transition shadow-lg shadow-yellow-500/20">
+                Commencer
+            </a>
+            <a href="{{ url_for('auth.login') }}" class="px-8 py-3 rounded-md border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition">
+                Connexion
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="mt-12 mb-20">
+    <div class="flex justify-between items-center mb-6 px-4">
+        <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+            <span id="ws-status" class="relative flex h-3 w-3" title="Connexion en cours...">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+            </span>
+            Market Weather (Live Binance)
+        </h2>
+        <span class="hidden sm:inline text-xs text-gray-500">Scanner : 15min | Prix : 1s (Ticker)</span>
+    </div>
+    
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 px-4">
+        {% for coin in market_data %}
+        <div class="bg-rwa-card rounded-xl border border-gray-800 hover:border-rwa-{{ coin.color_code }} transition relative overflow-hidden group shadow-lg">
+            
+            <div class="p-4 border-b border-gray-700/50 flex justify-between items-center bg-gray-900/30">
+                <div>
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                        <img src="https://assets.coincap.io/assets/icons/{{ coin.symbol.replace('USDT','').lower() }}@2x.png" 
+                             class="w-6 h-6 rounded-full" 
+                             alt="{{ coin.symbol }}"
+                             onerror="this.style.display='none'"> 
+                        {{ coin.symbol }}
+                    </h3>
+                    <p id="price-{{ coin.symbol }}" class="text-2xl font-bold text-gray-200 transition-colors duration-200 font-mono tracking-tight">
+                        ${{ "{:,.2f}".format(coin.price) }}
+                    </p>
+                </div>
+                <div class="text-right">
+                    <span class="px-3 py-1 rounded font-bold text-xs uppercase
+                        {% if coin.color_code == 'green' %}bg-green-900 text-green-400
+                        {% elif coin.color_code == 'red' %}bg-red-900 text-red-400
+                        {% else %}bg-yellow-900 text-yellow-400{% endif %}">
+                        {{ coin.global_signal }}
+                    </span>
+                </div>
+            </div>
+            
+            <div class="p-4 grid grid-cols-3 gap-2 text-center text-xs">
+                <div class="bg-gray-800 rounded p-2">
+                    <div class="text-gray-500 mb-1">1H (Sniper)</div>
+                    <div class="font-bold mb-1 {{ 'text-green-400' if coin.trend_1h == 'UPTREND' else 'text-red-400' }}">
+                        {{ "UP" if coin.trend_1h == 'UPTREND' else "DOWN" }}
+                    </div>
+                    <div class="text-gray-500">{{ coin.rsi_1h }}</div>
+                </div>
+                <div class="bg-gray-800 rounded p-2 border-l border-r border-gray-700">
+                    <div class="text-gray-500 mb-1">4H (Swing)</div>
+                    <div class="font-bold mb-1 {{ 'text-green-400' if coin.trend_4h == 'UPTREND' else 'text-red-400' }}">
+                        {{ "UP" if coin.trend_4h == 'UPTREND' else "DOWN" }}
+                    </div>
+                    <div class="text-gray-500">{{ coin.rsi_4h }}</div>
+                </div>
+                <div class="bg-gray-800 rounded p-2">
+                    <div class="text-gray-500 mb-1">Daily (Fond)</div>
+                    <div class="font-bold mb-1 {{ 'text-green-400' if coin.trend_1d == 'UPTREND' else 'text-red-400' }}">
+                        {{ "UP" if coin.trend_1d == 'UPTREND' else "DOWN" }}
+                    </div>
+                    <div class="text-gray-500">{{ coin.rsi_1d }}</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const statusDotBg = document.querySelector('#ws-status span.bg-yellow-500');
+    const statusDotPing = document.querySelector('#ws-status span.animate-ping');
+
+    const symbols = [];
+    {% for coin in market_data %}
+        symbols.push("{{ coin.symbol.replace('/','').lower() }}@miniTicker");
+    {% endfor %}
+
+    if (symbols.length === 0) return;
+
+    // CORRECTION ICI : On retire ":9443" pour utiliser le port par défaut (443)
+    // Cela contourne les blocages pare-feu.
+    const streamUrl = "wss://stream.binance.com/stream?streams=" + symbols.join('/');
+    console.log("Connexion Binance (Port 443):", streamUrl);
+    
+    let ws = new WebSocket(streamUrl);
+
+    ws.onopen = function() {
+        console.log("Connecté à Binance ✅");
+        if(statusDotBg) {
+            statusDotBg.classList.remove('bg-yellow-500', 'bg-red-500');
+            statusDotBg.classList.add('bg-green-500');
+        }
+        if(statusDotPing) {
+            statusDotPing.classList.remove('bg-yellow-400', 'bg-red-400');
+            statusDotPing.classList.add('bg-green-400');
+        }
+    };
+
+    ws.onmessage = function(event) {
+        try {
+            const response = JSON.parse(event.data);
+            const data = response.data; 
+
+            const symbol = data.s; 
+            const newPrice = parseFloat(data.c);
+            
+            const priceElement = document.getElementById(`price-${symbol}`);
+            
+            if (priceElement) {
+                const oldText = priceElement.innerText.replace('$','').replace(/,/g,'').trim();
+                const oldPrice = parseFloat(oldText);
+                const validOldPrice = isNaN(oldPrice) ? 0 : oldPrice;
+
+                priceElement.innerText = `$${newPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                
+                if (newPrice > validOldPrice) {
+                    priceElement.classList.remove('text-gray-200');
+                    priceElement.classList.add('text-green-400');
+                    setTimeout(() => {
+                        priceElement.classList.remove('text-green-400');
+                        priceElement.classList.add('text-gray-200');
+                    }, 500);
+                } else if (newPrice < validOldPrice) {
+                    priceElement.classList.remove('text-gray-200');
+                    priceElement.classList.add('text-red-400');
+                    setTimeout(() => {
+                        priceElement.classList.remove('text-red-400');
+                        priceElement.classList.add('text-gray-200');
+                    }, 500);
+                }
+            }
+        } catch (e) {
+            console.error("Erreur parsing:", e);
+        }
+    };
+
+    ws.onclose = function() {
+        console.log("Connexion coupée ❌");
+        if(statusDotBg) {
+            statusDotBg.classList.remove('bg-green-500');
+            statusDotBg.classList.add('bg-red-500');
+        }
+    };
+});
+</script>
+
+
+
+
+
+{% endblock %}

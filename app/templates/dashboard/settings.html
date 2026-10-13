@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex min-h-screen -mt-6">
+    <aside class="w-64 hidden md:block bg-rwa-card border-r border-gray-800 p-6">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Menu</h2>
+        <nav class="mt-4 space-y-2">
+            <a href="{{ url_for('dashboard.index') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Dashboard</a>
+            <a href="{{ url_for('dashboard.journal') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Journal</a>
+            <a href="{{ url_for('dashboard.strategies') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">Stratégies</a>
+            <a href="{{ url_for('dashboard.settings') }}" class="flex items-center px-4 py-2 text-white bg-rwa-blue/20 border-r-2 border-rwa-blue rounded-l-md">Paramètres</a>
+        </nav>
+    </aside>
+
+    <div class="flex-1 p-6">
+        <h1 class="text-2xl font-bold text-white mb-6">Paramètres</h1>
+        
+        <div class="max-w-xl space-y-6">
+            
+            <div class="bg-rwa-card p-6 rounded-xl border border-gray-800">
+                <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <svg class="w-6 h-6 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.693 0l-1.352.065-.693-.065zm.693 5.86c.92 0 1.956.593 2.14 1.838l.013.273a.853.853 0 0 1-.027.273l-.013.137c-.36 3.667-1.84 8.08-4.653 9.493-1.04.52-2.187.32-3.08-.28-.893-.6-1.347-1.467-1.333-2.48.013-1.013.48-1.867 1.333-2.467.853-.6 1.973-.8 3.013-.28 2.307-1.16 3.493-4.653 3.773-7.587l.013-.133a.853.853 0 0 1 .027-.273l.013-.274c-.184-1.245-1.22-1.838-2.14-1.838z"/></svg>
+                    Notifications Telegram
+                </h3>
+                
+                <p class="text-sm text-gray-400 mb-4">
+                    Recevez les signaux "SNIPER ENTRY" et "STRONG BUY" directement sur votre mobile.
+                </p>
+
+                <ol class="list-decimal list-inside text-sm text-gray-400 mb-4 space-y-1">
+                    <li>Lancez votre bot Telegram.</li>
+                    <li>Cherchez le bot <strong>@userinfobot</strong> et lancez-le.</li>
+                    <li>Il vous donnera votre "Id". Copiez-le ci-dessous.</li>
+                </ol>
+
+                <form method="POST" action="{{ url_for('dashboard.settings') }}">
+                    <div class="mb-4">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Votre Telegram ID (Chat ID)</label>
+                        <input type="text" name="telegram_id" value="{{ current_user.telegram_id or '' }}" 
+                               placeholder="ex: 123456789"
+                               class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white">
+                    </div>
+                    <div class="flex gap-4">
+                        <button type="submit" class="bg-rwa-blue hover:bg-sky-600 text-white px-4 py-2 rounded font-bold text-sm">
+                            Sauvegarder
+                        </button>
+                        {% if current_user.telegram_id %}
+                        <a href="{{ url_for('dashboard.test_notification') }}" class="border border-gray-600 text-gray-300 hover:text-white hover:border-white px-4 py-2 rounded font-bold text-sm">
+                            Tester l'alerte
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-rwa-card p-6 rounded-xl border border-gray-800 opacity-50">
+                <h3 class="text-lg font-bold text-white mb-2">Sécurité</h3>
+                <p class="text-gray-400 text-sm">Email: {{ current_user.email }}</p>
+                <p class="text-xs text-gray-600 mt-2">Le changement de mot de passe n'est pas encore activé.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

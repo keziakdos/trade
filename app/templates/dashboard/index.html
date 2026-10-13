@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex min-h-screen -mt-6"> 
+    
+    <aside class="w-64 hidden md:block bg-rwa-card border-r border-gray-800 p-6">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Menu</h2>
+        <nav class="mt-4 space-y-2">
+            <a href="{{ url_for('dashboard.index') }}" class="flex items-center px-4 py-2 text-white bg-rwa-blue/20 border-r-2 border-rwa-blue rounded-l-md">
+                <span class="font-medium">Dashboard</span>
+            </a>
+            <a href="{{ url_for('dashboard.journal') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">
+                <span>Journal</span>
+            </a>
+            <a href="{{ url_for('dashboard.strategies') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">
+                <span>Stratégies</span>
+            </a>
+            <a href="{{ url_for('dashboard.settings') }}" class="flex items-center px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition">
+                <span>Paramètres</span>
+            </a>
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('admin.users_list') }}" class="flex items-center px-4 py-2 text-red-400 hover:text-white hover:bg-red-900/30 rounded-md transition mt-4">
+                <span>Admin Users</span>
+            </a>
+            {% endif %}
+        </nav>
+    </aside>
+
+    <div class="flex-1 p-6 space-y-6">
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {% for coin in market_data[:4] %}
+            <div class="bg-rwa-card p-3 rounded-lg border border-gray-800 relative overflow-hidden group hover:border-rwa-{{ coin.color_code }}">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-bold text-white flex items-center gap-2">
+                        <img src="https://assets.coincap.io/assets/icons/{{ coin.symbol.replace('USDT','').lower() }}@2x.png" class="w-5 h-5 rounded-full" onerror="this.style.display='none'">
+                        {{ coin.symbol }}
+                    </span>
+                    <span class="text-xs font-bold px-2 py-0.5 rounded uppercase
+                        {% if coin.color_code == 'green' %}bg-green-900 text-green-400
+                        {% elif coin.color_code == 'red' %}bg-red-900 text-red-400
+                        {% else %}bg-yellow-900 text-yellow-400{% endif %}">
+                        {{ coin.global_signal }}
+                    </span>
+                </div>
+                <div class="grid grid-cols-3 gap-1 text-[10px] text-center bg-gray-900/50 rounded p-1">
+                    <div>
+                        <div class="text-gray-500">1H</div>
+                        <div class="{{ 'text-green-400' if coin.trend_1h == 'UPTREND' else 'text-red-400' }}">{{ "UP" if coin.trend_1h == 'UPTREND' else "DWN" }}</div>
+                    </div>
+                    <div class="border-l border-r border-gray-700">
+                        <div class="text-gray-500">4H</div>
+                        <div class="{{ 'text-green-400' if coin.trend_4h == 'UPTREND' else 'text-red-400' }}">{{ "UP" if coin.trend_4h == 'UPTREND' else "DWN" }}</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-500">1D</div>
+                        <div class="{{ 'text-green-400' if coin.trend_1d == 'UPTREND' else 'text-red-400' }}">{{ "UP" if coin.trend_1d == 'UPTREND' else "DWN" }}</div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-rwa-card rounded-xl border border-gray-800 p-4 h-[450px] relative">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-white font-bold flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                            <span id="chart-title">BTC/USDT</span> - Daily
+                        </h3>
+                    </div>
+                    <div id="tv_chart_container" class="w-full h-[390px]"></div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-gray-900 rounded-xl border border-rwa-blue/30 p-6 shadow-lg shadow-blue-900/10">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-rwa-blue">Simulateur</h3>
+                        <span id="sim-status" class="text-xs text-gray-500">Live: OFF</span>
+                    </div>
+                    
+                    <form action="{{ url_for('dashboard.simulate_trade') }}" method="POST" class="space-y-4" id="sim-form">
+                        <div>
+                            <label class="text-xs text-gray-500 uppercase">Actif</label>
+                            <select name="symbol" id="symbol-select" class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-rwa-blue outline-none">
+                                <optgroup label="Crypto (Binance)">
+                                {% for coin in market_data if (coin.source or 'binance') == 'binance' %}
+                                <option value="{{ coin.symbol }}">{{ coin.symbol }}</option>
+                                {% endfor %}
+                                </optgroup>
+                                <optgroup label="Gold / Forex / Indices (Yahoo)">
+                                {% for coin in market_data if (coin.source or '') == 'yahoo' %}
+                                <option value="{{ coin.symbol }}">{{ coin.symbol }} ({{ coin.asset_type }})</option>
+                                {% endfor %}
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs text-gray-500 uppercase flex justify-between">
+                                    Entrée ($) 
+                                    <span class="text-rwa-blue cursor-pointer hover:underline" onclick="toggleLivePrice()" title="Activer/Désactiver prix auto">Auto?</span>
+                                </label>
+                                <input type="number" step="any" name="entry" id="entry-input" required class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white font-mono transition-colors">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-500 uppercase">Capital fictif ($)</label>
+                                <input type="number" step="any" name="capital" id="capital-input" value="1000" required class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white font-mono">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs text-red-400 uppercase">Stop Loss ($)</label>
+                                <input type="number" step="any" name="sl" id="sl-input" required class="w-full bg-gray-800 border border-red-900/50 rounded p-2 text-white font-mono">
+                            </div>
+                            <div>
+                                <label class="text-xs text-green-400 uppercase">Take Profit ($)</label>
+                                <input type="number" step="any" name="tp" id="tp-input" required class="w-full bg-gray-800 border border-green-900/50 rounded p-2 text-white font-mono">
+                            </div>
+                        </div>
+
+                        <div id="sim-preview" class="text-xs font-mono bg-gray-900/60 border border-gray-700 rounded p-2 text-gray-300">
+                            Direction : <span id="pv-dir" class="font-bold">—</span> |
+                            R/R : <span id="pv-rr">—</span> |
+                            <span class="text-red-400">Risque <span id="pv-risk">—</span></span> |
+                            <span class="text-green-400">Gain <span id="pv-reward">—</span></span>
+                            <div class="text-gray-500 mt-1">LONG = SL &lt; Entrée &lt; TP (hausse). SHORT = SL &gt; Entrée &gt; TP (baisse).</div>
+                        </div>
+
+                        <button type="submit" class="w-full bg-rwa-blue hover:bg-sky-600 text-white font-bold py-3 rounded-lg transition mt-4">
+                            Valider la Simulation
+                        </button>
+                    </form>
+                </div>
+
+                <div class="bg-rwa-card rounded-xl border border-gray-800 p-6">
+                    <h3 class="text-sm font-bold text-gray-400 mb-4">Historique Récent</h3>
+                    <div class="space-y-3">
+                        {% for trade in recent_trades %}
+                        <div class="flex justify-between items-center text-sm border-b border-gray-800 pb-2">
+                            <div>
+                                <span class="font-bold text-white">{{ trade.symbol }}</span>
+                                <span class="text-[10px] font-bold px-1 rounded {{ 'bg-green-900 text-green-400' if (trade.direction or 'LONG')=='LONG' else 'bg-red-900 text-red-400' }}">{{ trade.direction or 'LONG' }}</span>
+                                <span class="text-xs text-gray-500 block">{{ trade.entry_date.strftime('%d/%m %H:%M') }}</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="block text-gray-300 font-mono">{{ trade.risk_reward }} R</span>
+                                <span class="text-xs {{ 'text-green-400' if trade.status == 'closed' and trade.outcome == 'WIN' else 'text-rwa-blue' }}">
+                                    {{ trade.outcome if trade.outcome else trade.status }}
+                                </span>
+                                {% if trade.risk_amount_usd %}<span class="block text-[10px] text-gray-500">Risque -{{ trade.risk_amount_usd }}$ / +{{ trade.reward_amount_usd }}$</span>{% endif %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-xs text-gray-600">Aucune simulation.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+
+
+<script>
+    let activeSocket = null;
+    let isLivePrice = true;
+    let currentSymbol = 'btcusdt';
+    let lastCandle = null; // Mémoire de la dernière bougie
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // 1. Init Chart
+        const chartContainer = document.getElementById('tv_chart_container');
+        const chart = LightweightCharts.createChart(chartContainer, {
+            layout: { textColor: '#94a3b8', background: { type: 'solid', color: '#1e293b' } },
+            grid: { vertLines: { color: '#334155' }, horzLines: { color: '#334155' } },
+            width: chartContainer.clientWidth, height: 390,
+            timeScale: { timeVisible: true, secondsVisible: false }
+        });
+        
+        const candleSeries = chart.addCandlestickSeries({
+            upColor: '#20603D', downColor: '#ef4444', 
+            borderVisible: false, 
+            wickUpColor: '#20603D', wickDownColor: '#ef4444',
+        });
+
+        window.addEventListener('resize', () => chart.resize(chartContainer.clientWidth, 390));
+
+        // 2. Load History API
+        async function loadHistory(symbol) {
+            try {
+                // On coupe le websocket précédent pour éviter les conflits
+                if(activeSocket) activeSocket.close();
+
+                const response = await fetch(`/api/history/${symbol}`);
+                const res = await response.json();
+                
+                if(res.success) {
+                    const data = res.data;
+                    candleSeries.setData(data);
+                    
+                    // On sauvegarde la dernière bougie pour la modifier en live
+                    lastCandle = data[data.length - 1];
+
+                    chart.timeScale().fitContent();
+                    document.getElementById('chart-title').innerText = symbol.replace('USDT', '/USDT');
+                    
+                    // On lance le Live
+                    connectLivePrice(symbol, candleSeries);
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        // 3. Gestion Selecteur
+        const select = document.getElementById('symbol-select');
+        select.addEventListener('change', (e) => {
+            currentSymbol = e.target.value;
+            loadHistory(currentSymbol);
+        });
+
+        // Premier chargement
+        currentSymbol = select.value;
+        loadHistory(currentSymbol);
+    });
+
+    // 4. WebSocket (Simulateur + Graphique) — crypto uniquement, Yahoo = prix daily figé
+    const YAHOO_SYMBOLS = ['GOLD', 'EURUSD', 'SP500'];
+    function connectLivePrice(symbol, series) {
+        const simStatus = document.getElementById('sim-status');
+        const entryInput = document.getElementById('entry-input');
+        if (YAHOO_SYMBOLS.includes(symbol)) {
+            // Pas de WS Binance pour Yahoo : on fige sur le dernier close, mode manuel
+            simStatus.innerText = "Live: Yahoo (daily)";
+            simStatus.classList.remove('text-green-500');
+            simStatus.classList.add('text-yellow-500');
+            if (lastCandle && entryInput && isLivePrice) entryInput.value = lastCandle.close;
+            updateSimPreview();
+            return;
+        }
+        const cleanSymbol = symbol.replace('/','').toLowerCase();
+        
+        // Utilisation de l'URL qui a marché pour vous (Secours ou US selon votre cas)
+        // Je remets la détection automatique pour être sûr
+        const wsUrl = `wss://data-stream.binance.com/ws/${cleanSymbol}@miniTicker`;
+        
+        console.log("Connexion Chart Live:", wsUrl);
+        activeSocket = new WebSocket(wsUrl);
+        
+        const simStatus = document.getElementById('sim-status');
+        const entryInput = document.getElementById('entry-input');
+
+        activeSocket.onopen = () => {
+            simStatus.innerText = "Live: ON";
+            simStatus.classList.remove('text-red-500');
+            simStatus.classList.add('text-green-500');
+        };
+
+        activeSocket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            const price = parseFloat(data.c); // Prix actuel
+            
+            // A. Mise à jour du Formulaire Simulateur
+            if(isLivePrice && entryInput) {
+                entryInput.value = price;
+                try { updateSimPreview(); } catch(e) {}
+            }
+
+            // B. Mise à jour du Graphique (La bougie qui danse !)
+            if (lastCandle) {
+                // On met à jour la bougie actuelle avec le nouveau prix
+                // On ajuste High et Low si le prix dépasse les bornes du jour
+                if (price > lastCandle.high) lastCandle.high = price;
+                if (price < lastCandle.low) lastCandle.low = price;
+                lastCandle.close = price;
+
+                // TradingView met à jour le dessin instantanément
+                series.update(lastCandle);
+            }
+        };
+        
+        activeSocket.onerror = (e) => {
+            console.log("Erreur WS, bascule vers serveur US...");
+            activeSocket = new WebSocket(`wss://stream.binance.us:9443/ws/${cleanSymbol}@miniTicker`);
+        }
+    }
+
+    window.toggleLivePrice = function() {
+        isLivePrice = !isLivePrice;
+        const status = document.getElementById('sim-status');
+        if(isLivePrice) {
+            status.innerText = "Live: ON";
+            status.classList.remove('text-red-500');
+            status.classList.add('text-green-500');
+        } else {
+            status.innerText = "Live: PAUSED (Manuel)";
+            status.classList.remove('text-green-500');
+            status.classList.add('text-red-500');
+        }
+    }
+    
+    document.getElementById('entry-input').addEventListener('focus', () => {
+        if(isLivePrice) toggleLivePrice();
+    });
+
+    // 5. Aperçu R/R + direction en direct (C1+C4)
+    function updateSimPreview() {
+        const e = parseFloat(document.getElementById('entry-input').value);
+        const s = parseFloat(document.getElementById('sl-input').value);
+        const t = parseFloat(document.getElementById('tp-input').value);
+        const c = parseFloat(document.getElementById('capital-input').value);
+        const dirEl = document.getElementById('pv-dir'), rrEl = document.getElementById('pv-rr');
+        const riskEl = document.getElementById('pv-risk'), rewEl = document.getElementById('pv-reward');
+        if (![e,s,t,c].every(v => isFinite(v) && v > 0)) { dirEl.textContent='—'; rrEl.textContent='—'; riskEl.textContent='—'; rewEl.textContent='—'; return; }
+        let dir = '—';
+        if (s < e && e < t) dir = 'LONG ↑';
+        else if (s > e && e > t) dir = 'SHORT ↓';
+        else dir = '⚠️ incohérent';
+        dirEl.textContent = dir;
+        dirEl.className = 'font-bold ' + (dir.startsWith('LONG') ? 'text-green-400' : dir.startsWith('SHORT') ? 'text-red-400' : 'text-yellow-400');
+        const risk = Math.abs(e - s), reward = Math.abs(t - e);
+        rrEl.textContent = risk ? (reward / risk).toFixed(2) + ' R' : '—';
+        riskEl.textContent = '−' + (risk / e * c).toFixed(2) + '$';
+        rewEl.textContent = '+' + (reward / e * c).toFixed(2) + '$';
+    }
+    ['entry-input','sl-input','tp-input','capital-input'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updateSimPreview);
+    });
+    // recalcul après chaque tick live
+    const _origUpdate = window.toggleLivePrice;
+    setTimeout(updateSimPreview, 500);
+</script>
+
+
+
+
+
+{% endblock %}

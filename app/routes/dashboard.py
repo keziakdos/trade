@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, abort
 from flask_login import login_required, current_user
-from app.models import MarketStatus, TradeSimulation, TradeNote, db
+from app.models import MarketStatus, TradeSimulation, TradeNote, Portfolio, db
 import json
 from datetime import datetime # Assurez-vous d'avoir cet import en haut du fichier
 import ccxt
@@ -9,25 +9,73 @@ from flask import jsonify
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
+def get_or_create_default_portfolio():
+    """Un portefeuille 'Principal' par utilisateur (C10)."""
+    pf = Portfolio.query.filter_by(user_id=current_user.id).order_by(Portfolio.id).first()
+    if pf is None:
+        pf = Portfolio(user_id=current_user.id, name='Principal', initial_balance=10000.0)
+        db.session.add(pf)
+        db.session.commit()
+    return pf
+
 @dashboard_bp.route('/dashboard')
 @login_required
 def index():
     # 1. On récupère les données du scanner pour le résumé en haut
     market_data = MarketStatus.query.all()
-    
+
+    # Portefeuilles (C10) : auto-crée 'Principal' si aucun
+    get_or_create_default_portfolio()
+    portfolios = Portfolio.query.filter_by(user_id=current_user.id).order_by(Portfolio.id).all()
+    pf_stats = []
+    for pf in portfolios:
+        closed = [t for t in pf.trades if t.status == 'closed' and t.pnl_usd]
+        wins = sum(1 for t in pf.trades if t.outcome == 'WIN')
+        pf_stats.append({
+            'pf': pf,
+            'equity': pf.equity(),
+            'pnl_total': round(sum(t.pnl_usd for t in closed), 2),
+            'n_trades': len(pf.trades),
+            'n_closed': len(closed),
+            'winrate': round(wins / len(closed) * 100, 1) if closed else 0,
+        })
+
     # 2. On récupère l'historique des simulations de l'utilisateur
     recent_trades = TradeSimulation.query.filter_by(user_id=current_user.id).order_by(TradeSimulation.entry_date.desc()).limit(5).all()
-    
+
     # 3. Préparation des données pour le Graphique TradingView (Demo: BTC data simple)
     # Dans une V2, on passera l'historique complet via une API interne
     # Pour l'instant, on envoie juste le dernier prix pour initialiser
     btc_data = MarketStatus.query.filter_by(symbol='BTCUSDT').first()
     current_btc_price = btc_data.price if btc_data else 0
 
-    return render_template('dashboard/index.html', 
+    return render_template('dashboard/index.html',
                          market_data=market_data,
                          recent_trades=recent_trades,
-                         btc_price=current_btc_price)
+                         btc_price=current_btc_price,
+                         portfolios=portfolios,
+                         pf_stats=pf_stats)
+
+
+@dashboard_bp.route('/portfolios', methods=['POST'])
+@login_required
+def create_portfolio():
+    """Crée un portefeuille fictif (C10)."""
+    name = (request.form.get('name') or '').strip()[:50] or 'Portefeuille'
+    try:
+        balance = float(request.form.get('initial_balance') or 10000)
+        if balance <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        flash("Balance initiale invalide.", "error")
+        return redirect(url_for('dashboard.index'))
+    if Portfolio.query.filter_by(user_id=current_user.id, name=name).first():
+        flash("Un portefeuille porte déjà ce nom.", "error")
+        return redirect(url_for('dashboard.index'))
+    db.session.add(Portfolio(user_id=current_user.id, name=name, initial_balance=balance))
+    db.session.commit()
+    flash(f"Portefeuille '{name}' créé ({balance}$ fictifs).", "success")
+    return redirect(url_for('dashboard.index'))
 
 
 
@@ -129,8 +177,17 @@ def simulate_trade():
     risk_amount = round(risk / entry * capital, 2)
     reward_amount = round(reward / entry * capital, 2)
 
+    # Portefeuille (C10) : vérifie l'appartenance, sinon défaut
+    default_pf = get_or_create_default_portfolio()
+    try:
+        pf_id = int(request.form.get('portfolio_id') or default_pf.id)
+    except (TypeError, ValueError):
+        pf_id = default_pf.id
+    pf = Portfolio.query.filter_by(id=pf_id, user_id=current_user.id).first() or default_pf
+
     sim = TradeSimulation(
         user_id=current_user.id,
+        portfolio_id=pf.id,
         symbol=symbol,
         direction=direction,
         entry_price=entry,
@@ -147,26 +204,35 @@ def simulate_trade():
     db.session.add(sim)
     db.session.commit()
 
-    flash(f"Simulation {direction} enregistrée ! R/R: {rr_ratio} | Risque: -{risk_amount}$ | Gain: +{reward_amount}$", "success")
+    flash(f"Simulation {direction} [{pf.name}] enregistrée ! R/R: {rr_ratio} | Risque: -{risk_amount}$ | Gain: +{reward_amount}$", "success")
     return redirect(url_for('dashboard.index'))
 
-
-# ... (Après tout le code existant) ...
 
 @dashboard_bp.route('/journal')
 @login_required
 def journal():
-    # 1. Récupérer les trades
-    trades = TradeSimulation.query.filter_by(user_id=current_user.id).order_by(TradeSimulation.entry_date.desc()).all()
-    
+    get_or_create_default_portfolio()
+    portfolios = Portfolio.query.filter_by(user_id=current_user.id).order_by(Portfolio.id).all()
+    # Filtre portefeuille via ?portfolio_id=
+    try:
+        filter_pf_id = int(request.args.get('portfolio_id') or 0) or None
+    except (TypeError, ValueError):
+        filter_pf_id = None
+    q = TradeSimulation.query.filter_by(user_id=current_user.id)
+    if filter_pf_id:
+        q = q.filter_by(portfolio_id=filter_pf_id)
+    trades = q.order_by(TradeSimulation.entry_date.desc()).all()
+
     # 2. Récupérer les prix actuels du marché pour l'affichage "En cours"
     market_status = MarketStatus.query.all()
     # On crée un dictionnaire pour accès rapide : {'BTCUSDT': 65000, 'ETHUSDT': 3500...}
     current_prices = {m.symbol: m.price for m in market_status}
-    
-    return render_template('dashboard/journal.html', 
-                         trades=trades, 
-                         current_prices=current_prices)
+
+    return render_template('dashboard/journal.html',
+                         trades=trades,
+                         current_prices=current_prices,
+                         portfolios=portfolios,
+                         filter_pf_id=filter_pf_id)
 
 
 
@@ -245,7 +311,7 @@ def add_note(trade_id):
     flash('Note ajoutée au journal.', 'success')
     return redirect(url_for('dashboard.journal'))
 
-@dashboard_bp.route('/trade/delete/<int:trade_id>')
+@dashboard_bp.route('/trade/delete/<int:trade_id>', methods=['POST'])
 @login_required
 def delete_trade(trade_id):
     trade = TradeSimulation.query.get_or_404(trade_id)

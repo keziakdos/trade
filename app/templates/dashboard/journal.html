@@ -12,6 +12,15 @@
     </aside>
     <div class="flex-1 p-6">
         <h1 class="text-2xl font-bold text-white mb-2">Journal de Trading <span class="text-xs text-gray-500 font-normal">(montants fictifs — apprentissage)</span></h1>
+        <form method="GET" class="flex items-center gap-2 mb-4 text-sm">
+            <label class="text-gray-500 text-xs">Portefeuille :</label>
+            <select name="portfolio_id" onchange="this.form.submit()" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                <option value="">Tous</option>
+                {% for pf in portfolios %}
+                <option value="{{ pf.id }}" {% if filter_pf_id==pf.id %}selected{% endif %}>{{ pf.name }}</option>
+                {% endfor %}
+            </select>
+        </form>
         <p class="text-xs text-gray-500 mb-6">LONG = pari hausse | SHORT = pari baisse. P&amp;L live recalcul\u00e9 c\u00f4t\u00e9 serveur au refresh, et en direct via WebSocket pour les cryptos.</p>
         <div class="bg-rwa-card rounded-xl border border-gray-800 overflow-x-auto shadow-xl">
             <table class="min-w-full text-left text-sm text-gray-400">
@@ -35,6 +44,7 @@
                             <div class="font-bold text-white">{{ trade.symbol }}</div>
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded {{ 'bg-green-900 text-green-400' if dir=='LONG' else 'bg-red-900 text-red-400' }}">{{ 'LONG \u2191' if dir=='LONG' else 'SHORT \u2193' }}</span>
                             <div class="text-xs text-gray-600 mt-1">{{ trade.entry_date.strftime('%d/%m %H:%M') }} · {{ trade.risk_reward }}R</div>
+                            {% if trade.portfolio %}<div class="text-[10px] text-rwa-blue mt-0.5">◈ {{ trade.portfolio.name }}</div>{% endif %}
                         </td>
                         <td class="px-4 py-4 font-mono text-xs">
                             <div class="text-white">E ${{ "{:,.2f}".format(trade.entry_price) }}</div>
@@ -100,9 +110,9 @@
                                 <textarea name="note" placeholder="Sentiment de cl\u00f4ture..." rows="1" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white"></textarea>
                             </form>
                             {% else %}
-                            <a href="{{ url_for('dashboard.delete_trade', trade_id=trade.id) }}" onclick="return confirm('Supprimer d\u00e9finitivement ?')" class="text-gray-600 hover:text-red-500 transition p-2 inline-block">
+                            <form action="{{ url_for('dashboard.delete_trade', trade_id=trade.id) }}" method="POST" onsubmit="return confirm('Supprimer d\u00e9finitivement ?')" class="inline"><button type="submit" class="text-gray-600 hover:text-red-500 transition p-2 inline-block">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </a>
+                            </button></form>
                             {% endif %}
                         </td>
                     </tr>

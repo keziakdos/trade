@@ -33,9 +33,29 @@ class User(UserMixin, db.Model):
         """Vérifie si l'utilisateur a été validé par l'admin"""
         return self.status == 'active'
 
+class Portfolio(db.Model):
+    """Portefeuille fictif d'apprentissage (C10)."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    name = db.Column(db.String(50), nullable=False, default='Principal')
+    initial_balance = db.Column(db.Float, nullable=False, default=10000.0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref=db.backref('portfolios', lazy=True, cascade='all, delete-orphan'))
+
+    def equity(self):
+        """Balance initiale + P&L clôturés (fictif)."""
+        total = self.initial_balance
+        for t in self.trades:
+            if t.status == 'closed' and t.pnl_usd:
+                total += t.pnl_usd
+        return round(total, 2)
+
+
 class TradeSimulation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    portfolio_id = db.Column(db.Integer, db.ForeignKey('portfolio.id'), nullable=True)
     
     symbol = db.Column(db.String(20), nullable=False) # ex: BTCUSDT
     direction = db.Column(db.String(10), nullable=False, default='LONG') # LONG (vers le haut) / SHORT (vers le bas)
@@ -64,6 +84,7 @@ class TradeSimulation(db.Model):
 
     # Relation pour accéder au User depuis un trade
     user = db.relationship('User', backref=db.backref('trades', lazy=True))
+    portfolio = db.relationship('Portfolio', backref=db.backref('trades', lazy=True))
 
     @property
     def direction_sign(self):

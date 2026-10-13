@@ -62,7 +62,7 @@
         
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {% for coin in market_data[:4] %}
-            <div class="bg-rwa-card p-3 rounded-lg border border-gray-800 relative overflow-hidden group hover:border-rwa-{{ coin.color_code }}">
+            <div class="bg-rwa-card p-3 rounded-lg border border-gray-800 relative overflow-hidden group hover:border-rwa-blue cursor-pointer transition" data-symbol="{{ coin.symbol }}" onclick="pickAsset('{{ coin.symbol }}')" title="Cliquer pour charger dans le simulateur">
                 <div class="flex justify-between items-center mb-2">
                     <span class="font-bold text-white flex items-center gap-2">
                         <img src="https://assets.coincap.io/assets/icons/{{ coin.symbol.replace('USDT','').lower() }}@2x.png" class="w-5 h-5 rounded-full" onerror="this.style.display='none'">
@@ -91,6 +91,18 @@
                 </div>
             </div>
             {% endfor %}
+        </div>
+        <div class="flex flex-wrap gap-2 items-center text-xs">
+            <span class="text-gray-500 uppercase text-[10px]">Yahoo :</span>
+            {% for coin in market_data %}
+            {% if (coin.source or '') == 'yahoo' %}
+            <button type="button" onclick="pickAsset('{{ coin.symbol }}')" title="Charger {{ coin.symbol }} dans le simulateur"
+                class="px-2 py-1 rounded-full border border-gray-700 bg-gray-900/60 text-gray-300 hover:border-rwa-blue hover:text-white transition font-mono">
+                {{ coin.symbol }} <span class="text-gray-500">${{ "{:,.2f}".format(coin.price) if coin.price else "…" }}</span>
+            </button>
+            {% endif %}
+            {% endfor %}
+            <span class="text-gray-600 text-[10px]">— cliquer charge l'actif dans le simulateur ↓</span>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -283,6 +295,20 @@
         // Premier chargement
         currentSymbol = select.value;
         loadHistory(currentSymbol);
+
+        // Exposé global : clic sur une carte/pill actif → charge dans le simulateur
+        window.pickAsset = function(symbol) {
+            const sel = document.getElementById('symbol-select');
+            if (sel) sel.value = symbol;
+            currentSymbol = symbol;
+            loadHistory(symbol);
+            const sim = document.getElementById('sim-form');
+            if (sim) {
+                sim.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+                sim.classList.add('ring-2', 'ring-rwa-blue', 'rounded-xl');
+                setTimeout(() => sim.classList.remove('ring-2', 'ring-rwa-blue', 'rounded-xl'), 1200);
+            }
+        };
     });
 
     // 4. WebSocket (Simulateur + Graphique) — crypto uniquement, Yahoo = prix daily figé

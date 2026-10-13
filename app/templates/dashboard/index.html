@@ -120,10 +120,9 @@
                             <label class="text-xs text-gray-500 uppercase">Portefeuille</label>
                             <select name="portfolio_id" id="portfolio-select" class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-rwa-blue outline-none">
                                 {% for s in pf_stats %}
-                                <option value="{{ s.pf.id }}" data-equity="{{ s.equity }}" data-pnl="{{ s.pnl_total }}">{{ s.pf.name }} — éq. ${{ "{:,.2f}".format(s.equity) }}</option>
+                                <option value="{{ s.pf.id }}" data-equity="{{ s.equity }}">{{ s.pf.name }}</option>
                                 {% endfor %}
                             </select>
-                            <div id="pf-hint" class="text-[11px] text-gray-500 mt-1"></div>
                         </div>
                         <div>
                             <label class="text-xs text-gray-500 uppercase">Actif</label>
@@ -151,8 +150,14 @@
                                 <input type="number" step="any" name="entry" id="entry-input" required class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white font-mono transition-colors">
                             </div>
                             <div>
-                                <label class="text-xs text-gray-500 uppercase">Capital fictif ($)</label>
-                                <input type="number" step="any" name="capital" id="capital-input" value="1000" required class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white font-mono">
+                                <label class="text-xs text-gray-500 uppercase">Montant à engager ($) <span class="normal-case text-gray-600">— libre</span></label>
+                                <input type="number" step="any" min="1" name="capital" id="capital-input" value="1000" required class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white font-mono">
+                                <div class="flex gap-1 mt-1">
+                                    <button type="button" data-pct="0.25" class="pct-btn flex-1 text-[11px] bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded px-1 py-1 text-gray-300">25%</button>
+                                    <button type="button" data-pct="0.5" class="pct-btn flex-1 text-[11px] bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded px-1 py-1 text-gray-300">50%</button>
+                                    <button type="button" data-pct="1" class="pct-btn flex-1 text-[11px] bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded px-1 py-1 text-gray-300">Max</button>
+                                </div>
+                                <div id="capital-hint" class="text-[11px] text-gray-500 mt-1"></div>
                             </div>
                         </div>
 
@@ -386,18 +391,35 @@
     });
     setTimeout(updateSimPreview, 500);
 
-    // 6. Rappel du portefeuille sélectionné (équité live du menu)
-    function updatePfHint() {
+    // 6. Montant libre : boutons % de l'équité du portefeuille choisi (l'équité vit dans le menu, pas ici)
+    function selectedEquity() {
         const sel = document.getElementById('portfolio-select');
-        const hint = document.getElementById('pf-hint');
-        if (!sel || !hint || !sel.selectedOptions.length) return;
-        const opt = sel.selectedOptions[0];
-        const eq = parseFloat(opt.dataset.equity || '0'), pnl = parseFloat(opt.dataset.pnl || '0');
-        hint.innerHTML = 'Équité : <span class="font-mono ' + (pnl >= 0 ? 'text-green-400' : 'text-red-400') + '">$' +
-            eq.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}) + ' (' + (pnl>=0?'+':'') + pnl.toFixed(2) + '$)</span> — la simulation sera rattachée à ce portefeuille.';
+        if (!sel || !sel.selectedOptions.length) return 0;
+        return parseFloat(sel.selectedOptions[0].dataset.equity || '0');
     }
-    document.getElementById('portfolio-select').addEventListener('change', updatePfHint);
-    setTimeout(updatePfHint, 500);
+    function updateCapitalHint() {
+        const hint = document.getElementById('capital-hint');
+        const cap = parseFloat(document.getElementById('capital-input').value);
+        const eq = selectedEquity();
+        if (!hint) return;
+        if (!isFinite(cap) || cap <= 0) { hint.textContent = ''; return; }
+        const pct = eq > 0 ? Math.round(cap / eq * 100) : 0;
+        hint.textContent = pct > 100
+            ? '⚠️ ' + pct + '% de l\u2019équité ($' + eq.toFixed(2) + ') — simulé quand même (fictif).'
+            : '≈ ' + pct + '% de l\u2019équité ($' + eq.toFixed(2) + ').';
+    }
+    document.querySelectorAll('.pct-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const eq = selectedEquity();
+            if (eq > 0) {
+                document.getElementById('capital-input').value = Math.round(eq * parseFloat(btn.dataset.pct) * 100) / 100;
+                updateCapitalHint(); updateSimPreview();
+            }
+        });
+    });
+    document.getElementById('capital-input').addEventListener('input', updateCapitalHint);
+    document.getElementById('portfolio-select').addEventListener('change', updateCapitalHint);
+    setTimeout(updateCapitalHint, 500);
 </script>
 
 

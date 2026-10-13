@@ -24,6 +24,18 @@
             </a>
             {% endif %}
         </nav>
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-6">Portefeuilles</h2>
+        <nav class="mt-2 space-y-1">
+            <a href="{{ url_for('dashboard.journal') }}" class="flex items-center justify-between px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition text-sm">
+                <span>Tous les trades</span>
+            </a>
+            {% for s in pf_stats %}
+            <a href="{{ url_for('dashboard.journal', portfolio_id=s.pf.id) }}" class="flex items-center justify-between px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition text-sm" title="{{ s.n_closed }}/{{ s.n_trades }} clôturés · WR {{ s.winrate }}%">
+                <span class="truncate">{{ s.pf.name }}</span>
+                <span class="font-mono text-xs {{ 'text-green-400' if s.equity >= s.pf.initial_balance else 'text-red-400' }}">${{ "{:,.0f}".format(s.equity) }}</span>
+            </a>
+            {% endfor %}
+        </nav>
     </aside>
 
     <div class="flex-1 p-6 space-y-6">
@@ -127,6 +139,7 @@
                                 </optgroup>
                             </select>
                         </div>
+                        </div>
                         
                         <div class="grid grid-cols-2 gap-4">
                             <div>
@@ -153,12 +166,13 @@
                             </div>
                         </div>
 
-                        <div id="sim-preview" class="text-xs font-mono bg-gray-900/60 border border-gray-700 rounded p-2 text-gray-300">
-                            Direction : <span id="pv-dir" class="font-bold">—</span> |
-                            R/R : <span id="pv-rr">—</span> |
-                            <span class="text-red-400">Risque <span id="pv-risk">—</span></span> |
-                            <span class="text-green-400">Gain <span id="pv-reward">—</span></span>
-                            <div class="text-gray-500 mt-1">LONG = SL &lt; Entrée &lt; TP (hausse). SHORT = SL &gt; Entrée &gt; TP (baisse).</div>
+                        <div id="sim-preview" class="text-xs bg-gray-900/60 border border-gray-700 rounded p-3 space-y-1">
+                            <div class="text-gray-500" id="pv-hint">Remplis Entrée, Stop Loss et Take Profit : je détecte le sens et je calcule ton risque et ton gain (fictifs).</div>
+                            <div id="pv-result" class="hidden font-mono">
+                                <div>Direction : <span id="pv-dir" class="font-bold">—</span> <span id="pv-explain" class="text-gray-400"></span></div>
+                                <div>Ratio : <span id="pv-rr" class="text-white">—</span> <span class="text-gray-500">(gain potentiel ÷ perte potentielle)</span></div>
+                                <div><span class="text-red-400">Si SL touché : <span id="pv-risk">—</span></span> · <span class="text-green-400">Si TP touché : <span id="pv-reward">—</span></span></div>
+                            </div>
                         </div>
 
                         <button type="submit" class="w-full bg-rwa-blue hover:bg-sky-600 text-white font-bold py-3 rounded-lg transition mt-4">
@@ -244,8 +258,13 @@
                     
                     // On lance le Live
                     connectLivePrice(symbol, candleSeries);
+                } else {
+                    document.getElementById('chart-title').innerText = symbol + ' — données indisponibles (' + (res.error || 'erreur') + ')';
                 }
-            } catch(e) { console.error(e); }
+            } catch(e) {
+                console.error(e);
+                document.getElementById('chart-title').innerText = symbol + ' — erreur de chargement';
+            }
         }
 
         // 3. Gestion Selecteur
@@ -282,9 +301,6 @@
         
         console.log("Connexion Chart Live:", wsUrl);
         activeSocket = new WebSocket(wsUrl);
-        
-        const simStatus = document.getElementById('sim-status');
-        const entryInput = document.getElementById('entry-input');
 
         activeSocket.onopen = () => {
             simStatus.innerText = "Live: ON";
@@ -339,31 +355,34 @@
         if(isLivePrice) toggleLivePrice();
     });
 
-    // 5. Aperçu R/R + direction en direct (C1+C4)
+    // 5. Aperçu risque/gain en direct : pédagogique, explique ce qui se passe
     function updateSimPreview() {
         const e = parseFloat(document.getElementById('entry-input').value);
         const s = parseFloat(document.getElementById('sl-input').value);
         const t = parseFloat(document.getElementById('tp-input').value);
         const c = parseFloat(document.getElementById('capital-input').value);
+        const hint = document.getElementById('pv-hint'), result = document.getElementById('pv-result');
         const dirEl = document.getElementById('pv-dir'), rrEl = document.getElementById('pv-rr');
         const riskEl = document.getElementById('pv-risk'), rewEl = document.getElementById('pv-reward');
-        if (![e,s,t,c].every(v => isFinite(v) && v > 0)) { dirEl.textContent='—'; rrEl.textContent='—'; riskEl.textContent='—'; rewEl.textContent='—'; return; }
-        let dir = '—';
-        if (s < e && e < t) dir = 'LONG ↑';
-        else if (s > e && e > t) dir = 'SHORT ↓';
-        else dir = '⚠️ incohérent';
-        dirEl.textContent = dir;
-        dirEl.className = 'font-bold ' + (dir.startsWith('LONG') ? 'text-green-400' : dir.startsWith('SHORT') ? 'text-red-400' : 'text-yellow-400');
+        const explain = document.getElementById('pv-explain');
+        if (![e,s,t,c].every(v => isFinite(v) && v > 0)) {
+            hint.classList.remove('hidden'); result.classList.add('hidden');
+            return;
+        }
+        hint.classList.add('hidden'); result.classList.remove('hidden');
+        let dir = '', cls = '', txt = '';
+        if (s < e && e < t) { dir = 'LONG ↑ (hausse)'; cls = 'font-bold text-green-400'; txt = '— tu gagnes si le prix MONTE vers le TP.'; }
+        else if (s > e && e > t) { dir = 'SHORT ↓ (baisse)'; cls = 'font-bold text-red-400'; txt = '— tu gagnes si le prix DESCEND vers le TP.'; }
+        else { dir = '⚠️ SL/TP incohérents'; cls = 'font-bold text-yellow-400'; txt = '— pour un LONG il faut SL < Entrée < TP, pour un SHORT SL > Entrée > TP.'; }
+        dirEl.textContent = dir; dirEl.className = cls; explain.textContent = txt;
         const risk = Math.abs(e - s), reward = Math.abs(t - e);
-        rrEl.textContent = risk ? (reward / risk).toFixed(2) + ' R' : '—';
+        rrEl.textContent = risk ? (reward / risk).toFixed(2) + 'R' : '—';
         riskEl.textContent = '−' + (risk / e * c).toFixed(2) + '$';
         rewEl.textContent = '+' + (reward / e * c).toFixed(2) + '$';
     }
     ['entry-input','sl-input','tp-input','capital-input'].forEach(id => {
         document.getElementById(id).addEventListener('input', updateSimPreview);
     });
-    // recalcul après chaque tick live
-    const _origUpdate = window.toggleLivePrice;
     setTimeout(updateSimPreview, 500);
 </script>
 

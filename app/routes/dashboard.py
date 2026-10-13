@@ -21,8 +21,8 @@ def get_or_create_default_portfolio():
 @dashboard_bp.route('/dashboard')
 @login_required
 def index():
-    # 1. On récupère les données du scanner pour le résumé en haut
-    market_data = MarketStatus.query.all()
+    # 1. On récupère les données du scanner pour le résumé en haut (cryptos d'abord, puis Yahoo)
+    market_data = MarketStatus.query.order_by(MarketStatus.source, MarketStatus.symbol).all()
 
     # Portefeuilles (C10) : auto-crée 'Principal' si aucun
     get_or_create_default_portfolio()

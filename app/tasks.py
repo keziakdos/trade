@@ -4,7 +4,7 @@ import datetime
 from app import db
 from app.models import MarketStatus
 import requests
-from app.models import User
+from app.models import User, TradeSimulation, TradeNote
 
 
 
@@ -120,6 +120,49 @@ def save_market_entry(db_symbol, tf_data, signal, color, asset_type='crypto', so
     db.session.add(market_entry)
 
 
+
+def check_sl_tp_touch():
+    """Surveille les trades ouverts : cloture auto si SL/TP touche + notifie (prix scan ~15 min)."""
+    try:
+        markets = {m.symbol: m.price for m in MarketStatus.query.all()}
+        if not markets:
+            return
+        open_trades = TradeSimulation.query.filter_by(status='open').all()
+        closed_count = 0
+        for tr in open_trades:
+            price = markets.get(tr.symbol)
+            if not price:
+                continue
+            direction = tr.direction or 'LONG'
+            hit_sl = (price <= tr.stop_loss) if direction == 'LONG' else (price >= tr.stop_loss)
+            hit_tp = (price >= tr.take_profit) if direction == 'LONG' else (price <= tr.take_profit)
+            if not (hit_sl or hit_tp):
+                continue
+            level = 'SL' if hit_sl else 'TP'
+            exit_price = tr.stop_loss if hit_sl else tr.take_profit
+            sign = 1 if direction == 'LONG' else -1
+            pnl_pct = sign * (exit_price - tr.entry_price) / tr.entry_price * 100 if tr.entry_price else 0
+            tr.pnl_usd = round(pnl_pct / 100 * (tr.position_size_usd or 0) * (tr.leverage or 1.0), 2)
+            tr.exit_price = exit_price
+            tr.status = 'closed'
+            tr.outcome = 'WIN' if tr.pnl_usd > 0 else 'LOSS'
+            tr.close_date = datetime.datetime.utcnow()
+            note = f"Cloture auto : {level} touche a ${exit_price} (prix scan ${round(price, 4)}). P&L {tr.pnl_usd}$."
+            tr.notes = note
+            db.session.add(TradeNote(trade_id=tr.id, user_id=tr.user_id, content=note))
+            owner = User.query.get(tr.user_id)
+            if owner is not None and owner.telegram_id:
+                mark = 'STOP' if level == 'SL' else 'BRAVO'
+                send_telegram_alert(owner.telegram_id,
+                    f"[{mark}] **{level} TOUCHE — {tr.symbol} {direction}** Sortie: ${exit_price} P&L: {tr.pnl_usd}$ ({tr.outcome})")
+            closed_count += 1
+        if closed_count:
+            print(f"{closed_count} trade(s) cloture(s) auto (SL/TP).")
+        db.session.commit()
+    except Exception as e:
+        print(f"Erreur surveillance SL/TP : {e}")
+        db.session.rollback()
+
 def get_market_analysis():
     print(f"[{datetime.datetime.now()}] Lancement du Scan Multi-Timeframe...")
     exchange = ccxt.binance()
@@ -170,5 +213,6 @@ def get_market_analysis():
                 continue
         db.session.commit()
         print("Scan V2 termine.")
+        check_sl_tp_touch()
     except Exception as e:
         print(f"Erreur Scanner V2 : {e}")

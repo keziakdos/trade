@@ -135,7 +135,7 @@
                             <label class="text-xs text-gray-500 uppercase">Portefeuille</label>
                             <select name="portfolio_id" id="portfolio-select" class="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-rwa-blue outline-none">
                                 {% for s in pf_stats %}
-                                <option value="{{ s.pf.id }}" data-equity="{{ s.equity }}" data-open="{{ s.open_engaged }}">{{ s.pf.name }}</option>
+                                <option value="{{ s.pf.id }}" data-equity="{{ s.equity }}" data-open="{{ s.open_engaged }}" data-init="{{ s.pf.initial_balance }}">{{ s.pf.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -158,14 +158,14 @@
                         
                         <div>
                             <label class="text-xs text-gray-500 uppercase">Stratégie <span class="normal-case text-gray-600">— remplit SL/TP</span></label>
-                            <div class="flex gap-2">
-                                <select id="strategy-select" name="strategy_id" class="flex-1 bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm focus:border-rwa-blue outline-none">
+                            <div class="flex gap-2 min-w-0">
+                                <select id="strategy-select" name="strategy_id" title="Choisir une stratégie pour remplir SL/TP" class="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm focus:border-rwa-blue outline-none truncate">
                                     <option value="">Manuelle (libre)</option>
                                     {% for st in strategies %}
-                                    <option value="{{ st.id }}" data-side="{{ st.side }}" data-sl="{{ st.sl_pct }}" data-tp="{{ st.tp_pct }}">{{ st.name }} ({{ st.side }} −{{ st.sl_pct }}% / +{{ st.tp_pct }}%)</option>
+                                    <option value="{{ st.id }}" data-side="{{ st.side }}" data-sl="{{ st.sl_pct }}" data-tp="{{ st.tp_pct }}" title="{{ st.name }} ({{ st.side }} −{{ st.sl_pct }}% / +{{ st.tp_pct }}%)">{{ st.name }}</option>
                                     {% endfor %}
                                 </select>
-                                <button type="button" id="strategy-apply" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs font-bold whitespace-nowrap">Appliquer</button>
+                                <button type="button" id="strategy-apply" class="shrink-0 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs font-bold whitespace-nowrap">Appliquer</button>
                             </div>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
@@ -437,23 +437,25 @@
     // Reste = équité − engagé (trades ouverts) − montant saisi
     function selectedFunds() {
         const sel = document.getElementById('portfolio-select');
-        if (!sel || !sel.selectedOptions.length) return {eq: 0, open: 0};
+        if (!sel || !sel.selectedOptions.length) return {eq: 0, open: 0, init: 0};
         const opt = sel.selectedOptions[0];
         return {
             eq: parseFloat(opt.dataset.equity || '0'),
-            open: parseFloat(opt.dataset.open || '0')
+            open: parseFloat(opt.dataset.open || '0'),
+            init: parseFloat(opt.dataset.init || '0')
         };
     }
     function updateCapitalHint() {
         const hint = document.getElementById('capital-hint');
         const cap = parseFloat(document.getElementById('capital-input').value);
-        const {eq, open} = selectedFunds();
+        const {eq, open, init} = selectedFunds();
         if (!hint) return;
         if (!isFinite(cap) || cap <= 0) { hint.textContent = ''; return; }
         const avail = eq - open;
         const rest = avail - cap;
-        hint.innerHTML = 'Reste après ce trade : <span class="font-mono font-bold ' + (rest >= 0 ? 'text-green-400' : 'text-red-400') + '">$' + rest.toFixed(2) + '</span>' +
-            (rest < 0 ? ' <span class="text-yellow-400">⚠️ (fictif — voir détail dans le portefeuille).</span>' : '');
+        hint.innerHTML = 'Départ $' + init.toFixed(2) + ' · Dispo $' + avail.toFixed(2) + ' → Reste après : ' +
+            '<span class="font-mono font-bold ' + (rest >= 0 ? 'text-green-400' : 'text-red-400') + '">$' + rest.toFixed(2) + '</span>' +
+            (rest < 0 ? ' <span class="text-yellow-400">⚠️ (fictif — détail carte portefeuille).</span>' : '');
     }
     document.querySelectorAll('.pct-btn').forEach(btn => {
         btn.addEventListener('click', () => {

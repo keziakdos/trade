@@ -33,9 +33,7 @@
                 {% endfor %}
             </select>
         </form>
-        <p class="text-xs text-gray-500 mb-6">LONG = pari hausse | SHORT = pari baisse. P&amp;L live recalculé côté serveur au refresh, et en direct via WebSocket pour les cryptos.
-            {% if archived_count %}{% if show_archived %}<a href="{{ url_for('dashboard.journal') }}" class="text-rwa-blue hover:underline">Masquer les archivés</a>{% else %}<a href="{{ url_for('dashboard.journal', show_archived=1) }}" class="text-rwa-blue hover:underline">Afficher les {{ archived_count }} archivé(s)</a>{% endif %}{% endif %}
-        </p>{% macro jrow(trade) %}
+        <p class="text-xs text-gray-500 mb-6">LONG = pari hausse | SHORT = pari baisse. P&amp;L live recalculé côté serveur au refresh, et en direct via WebSocket pour les cryptos.</p>{% macro jrow(trade) %}
                     {% set dir = trade.direction or 'LONG' %}
                     {% set sign = 1 if dir == 'LONG' else -1 %}
                     <tr class="hover:bg-gray-800/50 transition align-top" data-symbol="{{ trade.symbol }}" data-entry="{{ trade.entry_price }}" data-capital="{{ trade.position_size_usd }}" data-dir="{{ dir }}">
@@ -164,7 +162,7 @@
                 </tbody>
             </table>
         </div>
-        <h2 class="text-sm font-bold text-gray-300 mb-2 mt-2">{{ trades|selectattr('status', 'equalto', 'closed')|list|length }} — Trades clôturés (plus récents d’abord)</h2>
+        <h2 class="text-sm font-bold text-gray-300 mb-2 mt-2">{{ trades|selectattr('status', 'equalto', 'closed')|rejectattr('archived', 'equalto', true)|list|length }} — Trades clôturés (plus récents d’abord)</h2>
         <div class="bg-rwa-card rounded-xl border border-gray-800 overflow-x-auto shadow-xl mb-8">
             <table class="min-w-full text-left text-sm text-gray-400">
                 <thead class="bg-gray-900 text-xs uppercase font-medium text-gray-200">
@@ -179,10 +177,33 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-800">
-                    {% for trade in trades|selectattr('status', 'equalto', 'closed')|list %}
+                    {% for trade in trades|selectattr('status', 'equalto', 'closed')|rejectattr('archived', 'equalto', true)|list %}
                         {{ jrow(trade) }}
                     {% else %}
                     <tr><td colspan="7" class="px-4 py-6 text-center text-gray-600">Aucun trade clôturé pour l’instant.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <h2 class="text-sm font-bold text-gray-500 mb-2 mt-2">{{ trades|selectattr('archived', 'equalto', true)|list|length }} — 📦 Archivés définitivement (historique conservé)</h2>
+        <div class="bg-rwa-card rounded-xl border border-gray-800 overflow-x-auto shadow-xl mb-8 opacity-80">
+            <table class="min-w-full text-left text-sm text-gray-400">
+                <thead class="bg-gray-900 text-xs uppercase font-medium text-gray-200">
+                    <tr>
+                        <th class="px-4 py-4">Paire / Direction</th>
+                        <th class="px-4 py-4">Entrée / SL / TP</th>
+                        <th class="px-4 py-4">Prix Actuel / Sortie</th>
+                        <th class="px-4 py-4">P&amp;L live / final ($ + %)</th>
+                        <th class="px-4 py-4">Risque / Gain</th>
+                        <th class="px-4 py-4">Notes / Sentiment</th>
+                        <th class="px-4 py-4 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800">
+                    {% for trade in trades|selectattr('archived', 'equalto', true)|list %}
+                        {{ jrow(trade) }}
+                    {% else %}
+                    <tr><td colspan="7" class="px-4 py-6 text-center text-gray-600">Rien d’archivé — les trades archivés restent consultables ici.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

@@ -256,12 +256,8 @@ def journal():
     q = TradeSimulation.query.filter_by(user_id=current_user.id)
     if filter_pf_id:
         q = q.filter_by(portfolio_id=filter_pf_id)
-    # Archivés cachés par défaut (?show_archived=1 pour les revoir)
-    show_archived = request.args.get('show_archived') == '1'
-    if not show_archived:
-        q = q.filter((TradeSimulation.archived == False) | (TradeSimulation.archived == None))
+    # Les archivés ont leur section dédiée en bas (toujours visible)
     trades = q.order_by(TradeSimulation.entry_date.desc()).all()
-    archived_count = TradeSimulation.query.filter_by(user_id=current_user.id, archived=True).count()
 
     # Infos portefeuilles pour le sélecteur (équité + P&L à côté du nom)
     pf_info = {}
@@ -279,9 +275,7 @@ def journal():
                          current_prices=current_prices,
                          portfolios=portfolios,
                          pf_info=pf_info,
-                         filter_pf_id=filter_pf_id,
-                         show_archived=show_archived,
-                         archived_count=archived_count)
+                         filter_pf_id=filter_pf_id)
 
 
 @dashboard_bp.route('/trade/archive/<int:trade_id>', methods=['POST'])
@@ -313,7 +307,7 @@ def unarchive_trade(trade_id):
     trade.archived = False
     db.session.commit()
     flash("Trade restauré dans le journal.", "success")
-    return redirect(url_for('dashboard.journal', show_archived=1))
+    return redirect(url_for('dashboard.journal'))
 
 
 

@@ -66,7 +66,7 @@
                     </div>
                 </div>
                 <div class="flex gap-2 p-4 pt-2 mt-auto">
-                    <a href="{{ url_for('dashboard.index', strategy_id=st.id) }}" class="flex-1 text-center bg-rwa-blue hover:bg-sky-600 text-white px-3 py-2 rounded text-xs font-bold transition">▶ Utiliser dans le simulateur</a>
+                    <a href="{{ url_for('dashboard.index', strategy_id=st.id) }}" class="flex-1 text-center bg-rwa-blue hover:bg-sky-600 text-white px-3 py-2 rounded text-xs font-bold transition">▶ Utiliser cette stratégie</a>
                     {% if st.user_id == current_user.id %}
                     <button type="button" onclick="document.getElementById('edit-{{ st.id }}').classList.toggle('hidden')" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs">Modifier</button>
                     <form action="{{ url_for('dashboard.delete_strategy', strategy_id=st.id) }}" method="POST" onsubmit="return confirm('Supprimer cette stratégie ? (les trades déjà taggés gardent son nom)')" class="inline">

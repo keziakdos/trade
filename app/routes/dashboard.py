@@ -19,7 +19,66 @@ def get_or_create_default_portfolio():
     return pf
 
 def get_available_strategies():
-    """Stratégies système + celles de l'utilisateur (V2). Seed identique à la page Stratégies."""
+    """Stratégies système + celles de l'utilisateur (V2). Source unique : table Strategy.
+    Les 11 modules moteur sont fichés comme les stratégies manuelles (même présentation,
+    même bouton Utiliser) ; les lignes existantes sont conservées (jamais supprimées)."""
+    ENGINE_LIBRARY = [
+        dict(engine='williams_r', name='Williams %R (zones)', level='Débutant', side='LONG', sl=2.0, tp=4.0,
+             indicator='Williams %R 14', timeframe='1D',
+             entry="État : %R ≥ −20 surachat · ≤ −80 survente (non strict). Fenêtre 14 incluant la courante ; 13 premières = pas de donnée ; fenêtre plate = pas de donnée.",
+             exit="Lecture seule : aucune sortie propre — utilisez la lecture combinée ou la règle d'entrée.",
+             desc="Oscillateur borné −100 à 0 : position de la clôture dans sa fenêtre de 14 bougies."),
+        dict(engine='ultimate', name='Ultimate Oscillator (zones)', level='Intermédiaire', side='LONG', sl=2.0, tp=4.0,
+             indicator='UO 7/14/28', timeframe='1D',
+             entry="UO ≥ 70 surachat · ≤ 30 survente. Première valeur à la 29ᵉ bougie ; somme des amplitudes ≤ 0 = pas de donnée.",
+             exit="Lecture seule : utilisez les règles UO de la stratégie d'entrée.",
+             desc="Pression d'achat pondérée 4/2/1 sur 7, 14 et 28 bougies, borné 0 à 100."),
+        dict(engine='williams_r_ultimate_v1', name='Lecture combinée %R + UO', level='Intermédiaire', side='LONG', sl=2.0, tp=4.0,
+             indicator='%R 14 + UO', timeframe='1D',
+             entry="État affiché = celui du %R (dernière valeur non nulle). Confirmé si les deux d'accord et non neutres ; deux neutres ne confirment jamais.",
+             exit="Lecture seule : pas de sortie, utilisez la règle d'entrée.",
+             desc="Confluence %R prioritaire + Ultimate. Vocabulaire d'état uniquement, jamais acheter/vendre."),
+        dict(engine='williams_r_entry_v1', name='Entrée + sorties %R', level='Intermédiaire', side='LONG', sl=1.0, tp=2.0,
+             indicator='%R 14 (+UO)', timeframe='1D',
+             entry="LONG si %R a touché −100 sur les 5 dernières (courante exclue) ET courant ≥ −85. SHORT miroir : touché 0 ET courant ≤ −15. Ordre à l'ouverture suivante.",
+             exit="Zone : LONG sort si %R ≥ −20, SHORT si ≤ −80. Stop 1 %, objectif 2 % ; même bougie : le stop l'emporte.",
+             desc="Signaux %R + sorties zone/UO, exécution à l'ouverture suivante, sans levier, frais inclus."),
+        dict(engine='breakout_donchian_v1', name='Breakout (Cassure)', level='Intermédiaire', side='LONG', sl=3.0, tp=6.0,
+             indicator='Donchian 20 + Volume', timeframe='1D',
+             entry="Clôture au-delà du canal des 20 précédentes (courante exclue) + volume ≥ 1,5× la moyenne + clôture précédente déjà hors canal. Haut → LONG, bas → SHORT.",
+             exit="Stop/objectif du simulateur. Faux départ = on sort, on ne moyenne pas.",
+             desc="Explosion après compression. Jamais après +5 % en une bougie."),
+        dict(engine='pullback_trend_v1', name='Pullback en tendance', level='Intermédiaire', side='LONG', sl=2.0, tp=4.0,
+             indicator='EMA20/50', timeframe='1D',
+             entry="EMA20 > EMA50 (up). Plus bas des 5 dernières ≤ EMA20 × 1,005. Clôture ≥ EMA50. Miroir en down.",
+             exit="Stop/objectif du simulateur.",
+             desc="Achat du repli dans une tendance établie, structure conservée."),
+        dict(engine='mean_reversion_atr_v1', name='Mean Reversion ATR (sens inversé)', level='Avancé', side='LONG', sl=2.0, tp=4.0,
+             indicator='SMA20 + ATR14 + RSI', timeframe='1D',
+             entry="Écart à la SMA20 ≥ 1× ATR + RSI extrême (≥ 70 en up, ≤ 30 en down) + SMA20 stable (±2 % sur 10). SENS INVERSÉ : up → SHORT, down → LONG.",
+             exit="Stop/objectif du simulateur.",
+             desc="Retour à la moyenne après extension anormale, contre le sens de l'écart."),
+        dict(engine='trend_following_ma_v1', name='Suivi de Tendance (Trend Following)', level='Débutant', side='LONG', sl=2.0, tp=4.0,
+             indicator='EMA9/20 + SMA50', timeframe='1D',
+             entry="EMA9 > EMA20 > SMA50 strict + pente EMA20 sur 10 bougies + clôture du bon côté d'EMA20.",
+             exit="Stop/objectif du simulateur. Ne jamais trader contre l'alignement.",
+             desc="The Trend is your Friend : jamais contre le courant dominant."),
+        dict(engine='momentum_macd_v1', name='Momentum MACD + RSI + ROC', level='Intermédiaire', side='LONG', sl=2.0, tp=4.0,
+             indicator='MACD 12/26/9 + RSI + ROC20', timeframe='1D',
+             entry="Histogramme > 0 et croissant + RSI ≥ 50 + ROC20 ≥ 0. Miroir en down.",
+             exit="Stop/objectif du simulateur.",
+             desc="Triple confirmation d'élan : impulsion, force et vitesse."),
+        dict(engine='trend_long_ema_v1', name='Tendance longue EMA50/200', level='Débutant', side='LONG', sl=2.0, tp=4.0,
+             indicator='EMA50/200', timeframe='1D',
+             entry="EMA50 > EMA200 + prix ≥ EMA200 + pente EMA50 sur 10 bougies. Composant de fond, pas un signal seul.",
+             exit="—",
+             desc="Filtre de régime long terme pour valider les autres stratégies."),
+        dict(engine='panic_reversal_v1', name='Score de panique / retournement', level='Avancé', side='LONG', sl=2.0, tp=4.0,
+             indicator='Chute+Volume+RSI+%R', timeframe='1D',
+             entry="Score /100 : chute 25, volume 15, RSI 20, %R 15, confirmation 25. ≥ 60 + confirmation : potentiel retournement ; ≥ 60 seul : panique ; avertissement falling_knife. Jamais une probabilité.",
+             exit="Lecture seule : pas de sortie mécanique.",
+             desc="Mesure la capitulation : chute, volume, RSI, %R et confirmation cumulée."),
+    ]
     if Strategy.query.filter_by(user_id=None).count() == 0:
         db.session.add_all([
             Strategy(user_id=None, name='Suivi de Tendance (Trend Following)', level='Débutant',
@@ -39,17 +98,35 @@ def get_available_strategies():
                      description="Vente sur rejet d'une résistance en range, retour vers le bas du range."),
         ])
         db.session.commit()
-    else:
-        # Backfill règles sur seeds déjà existants (sans toucher aux ids)
-        for st, er, xr, ind, tf in [
-            ('Suivi de Tendance (Trend Following)', "Prix au-dessus de la MA200. Repli vers support. RSI < 70. Bougie verte engloutissante.", "Sortie au TP (+4%). Stop sous le support (−2%). Ne pas déplacer le stop.", 'MA200 + RSI', '1D'),
-            ('Breakout (Cassure)', "Prix bloqué sous résistance. Bougies qui se compriment. Cassure franche avec VOLUME. Jamais après +5% en une bougie.", "Sortie au TP (+6%). Stop sous la résistance cassée (−3%). Faux départ = on sort.", 'Volume + Range', '4H'),
-            ('Rejet de Résistance (Range Short)', "Prix bloqué sous une résistance en range. Mèche haute de rejet. RSI qui se retourne.", "Sortie au TP (−4%). Stop au-dessus de la résistance (+2%).", 'RSI + Résistance', '4H'),
-        ]:
-            row = Strategy.query.filter_by(user_id=None, name=st).first()
-            if row and not row.entry_rules:
-                row.entry_rules, row.exit_rules, row.indicator, row.timeframe = er, xr, ind, tf
-        db.session.commit()
+    # Backfill règles sur seeds déjà existants (sans toucher aux ids)
+    for st, er, xr, ind, tf in [
+        ('Rejet de Résistance (Range Short)', "Prix bloqué sous une résistance en range. Mèche haute de rejet. RSI qui se retourne.", "Sortie au TP (−4%). Stop au-dessus de la résistance (+2%).", 'RSI + Résistance', '4H'),
+    ]:
+        row = Strategy.query.filter_by(user_id=None, name=st).first()
+        if row and not row.entry_rules:
+            row.entry_rules, row.exit_rules, row.indicator, row.timeframe = er, xr, ind, tf
+    # Fiches moteur : mise à niveau des 2 lignes historiques (mêmes ids, mêmes noms),
+    # création des 9 autres si absentes (repérées par engine_id, jamais en double).
+    for seed in ENGINE_LIBRARY:
+        row = Strategy.query.filter_by(user_id=None, engine_id=seed['engine']).first()
+        if row is None and seed['name'] in ('Suivi de Tendance (Trend Following)', 'Breakout (Cassure)'):
+            row = Strategy.query.filter_by(user_id=None, name=seed['name']).first()
+            if row is not None and row.engine_id:
+                row = None  # déjà liée à un autre module : ne pas écraser
+        if row is not None:
+            row.engine_id = seed['engine']
+            row.level, row.side = seed['level'], seed['side']
+            row.sl_pct, row.tp_pct = seed['sl'], seed['tp']
+            row.indicator, row.timeframe = seed['indicator'], seed['timeframe']
+            row.entry_rules, row.exit_rules, row.description = seed['entry'], seed['exit'], seed['desc']
+        else:
+            if Strategy.query.filter_by(user_id=None, engine_id=seed['engine']).first() is None:
+                db.session.add(Strategy(user_id=None, name=seed['name'], level=seed['level'],
+                                        side=seed['side'], sl_pct=seed['sl'], tp_pct=seed['tp'],
+                                        indicator=seed['indicator'], timeframe=seed['timeframe'],
+                                        entry_rules=seed['entry'], exit_rules=seed['exit'],
+                                        description=seed['desc'], engine_id=seed['engine']))
+    db.session.commit()
     return Strategy.query.filter((Strategy.user_id == None) | (Strategy.user_id == current_user.id)).order_by(Strategy.id).all()
 
 @dashboard_bp.route('/dashboard')

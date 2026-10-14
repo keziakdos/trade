@@ -145,6 +145,7 @@ def check_sl_tp_touch():
             tr.pnl_usd = round(pnl_pct / 100 * (tr.position_size_usd or 0) * (tr.leverage or 1.0), 2)
             tr.exit_price = exit_price
             tr.status = 'closed'
+            tr.close_reason = level  # 'SL' ou 'TP' (vs 'MANUAL')
             tr.outcome = 'WIN' if tr.pnl_usd > 0 else 'LOSS'
             tr.close_date = datetime.datetime.utcnow()
             note = f"Cloture auto : {level} touche a ${exit_price} (prix scan ${round(price, 4)}). P&L {tr.pnl_usd}$."

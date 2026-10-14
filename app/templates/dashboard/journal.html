@@ -13,7 +13,11 @@
         <nav class="mt-2 space-y-1">
             <a href="{{ url_for('dashboard.journal') }}" class="flex items-center px-4 py-2 text-sm rounded-md transition {{ 'text-white bg-rwa-blue/20 border-r-2 border-rwa-blue rounded-l-md' if not filter_pf_id else 'text-gray-400 hover:text-white hover:bg-gray-800' }}">Tous les trades</a>
             {% for pf in portfolios %}
-            <a href="{{ url_for('dashboard.journal', portfolio_id=pf.id) }}" class="flex items-center px-4 py-2 text-sm rounded-md transition {{ 'text-white bg-rwa-blue/20 border-r-2 border-rwa-blue rounded-l-md' if filter_pf_id==pf.id else 'text-gray-400 hover:text-white hover:bg-gray-800' }}">{{ pf.name }}</a>
+            {% set info = pf_info.get(pf.id, {'equity': pf.initial_balance, 'pnl': 0}) %}
+            <a href="{{ url_for('dashboard.journal', portfolio_id=pf.id) }}" class="flex items-center justify-between px-4 py-2 text-sm rounded-md transition {{ 'text-white bg-rwa-blue/20 border-r-2 border-rwa-blue rounded-l-md' if filter_pf_id==pf.id else 'text-gray-400 hover:text-white hover:bg-gray-800' }}">
+                <span class="truncate">{{ pf.name }}</span>
+                <span class="font-mono text-xs {{ 'text-green-400' if info.pnl >= 0 else 'text-red-400' }}">{{ "{:+.0f}".format(info.pnl) }}$</span>
+            </a>
             {% endfor %}
         </nav>
     </aside>
@@ -24,7 +28,8 @@
             <select name="portfolio_id" onchange="this.form.submit()" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
                 <option value="">Tous</option>
                 {% for pf in portfolios %}
-                <option value="{{ pf.id }}" {% if filter_pf_id==pf.id %}selected{% endif %}>{{ pf.name }}</option>
+                {% set info = pf_info.get(pf.id, {'equity': pf.initial_balance, 'pnl': 0}) %}
+                <option value="{{ pf.id }}" {% if filter_pf_id==pf.id %}selected{% endif %}>{{ pf.name }} — ${{ "{:,.0f}".format(info.equity) }} ({{ "{:+.0f}".format(info.pnl) }}$)</option>
                 {% endfor %}
             </select>
         </form>
@@ -35,7 +40,15 @@
                         <td class="px-4 py-4">
                             <div class="font-bold text-white">{{ trade.symbol }}</div>
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded {{ 'bg-green-900 text-green-400' if dir=='LONG' else 'bg-red-900 text-red-400' }}">{{ 'LONG ↑' if dir=='LONG' else 'SHORT ↓' }}</span>
-                            <div class="text-xs text-gray-600 mt-1">{{ trade.entry_date.strftime('%d/%m %H:%M') }} · {{ trade.risk_reward }}R</div>
+                            <div class="text-xs text-gray-600 mt-1">Début {{ trade.entry_date.strftime('%d/%m/%Y %H:%M') }} · {{ trade.risk_reward }}R</div>
+                            {% if trade.status == 'closed' and trade.close_date %}
+                            <div class="text-xs text-gray-500">Fin {{ trade.close_date.strftime('%d/%m/%Y %H:%M') }}</div>
+                            {% set reason = trade.close_reason or 'MANUAL' %}
+                            <span class="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded
+                                {{ 'bg-green-900 text-green-300' if reason == 'TP' else ('bg-red-900 text-red-300' if reason == 'SL' else 'bg-gray-700 text-gray-300') }}">
+                                {{ '🎯 TP touché' if reason == 'TP' else ('🛑 SL touché' if reason == 'SL' else '👤 Clôturé manuellement') }}
+                            </span>
+                            {% endif %}
                             {% if trade.portfolio %}<div class="text-[10px] text-rwa-blue mt-0.5">◈ {{ trade.portfolio.name }}</div>{% endif %}
                             {% if trade.strategy_tag %}<div class="text-[10px] text-yellow-400/80 mt-0.5">📋 {{ trade.strategy_tag }}</div>{% endif %}
                         </td>
@@ -95,12 +108,15 @@
                         </td>
                         <td class="px-4 py-4 text-right">
                             {% if trade.status == 'open' %}
-                            <form action="{{ url_for('dashboard.close_trade', trade_id=trade.id) }}" method="POST" class="flex flex-col gap-2 items-end">
-                                <div class="flex gap-1">
-                                    <input type="number" step="any" name="exit_price" placeholder="Sortie ($)" required value="{{ current_prices.get(trade.symbol) }}" class="close-price w-24 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white">
-                                    <button type="submit" class="bg-rwa-blue hover:bg-sky-600 text-white px-3 py-1 rounded text-xs font-bold shadow">Close</button>
+                            <form action="{{ url_for('dashboard.close_trade', trade_id=trade.id) }}" method="POST" class="flex flex-col gap-2 items-end bg-gray-900/40 border border-gray-700/60 rounded-lg p-2">
+                                <div class="flex gap-1 w-full">
+                                    <input type="number" step="any" name="exit_price" placeholder="Prix de sortie ($)" required value="{{ current_prices.get(trade.symbol) }}" class="close-price flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white">
                                 </div>
-                                <textarea name="note" placeholder="Sentiment de clôture..." rows="1" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white"></textarea>
+                                <textarea name="note" id="note-{{ trade.id }}" placeholder="Note de fin (optionnel) : pourquoi sortir ici ?" rows="2" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white"></textarea>
+                                <div class="flex gap-1 w-full">
+                                    <button type="submit" class="flex-1 bg-rwa-blue hover:bg-sky-600 text-white px-2 py-1.5 rounded text-xs font-bold shadow">Clôturer + noter</button>
+                                    <button type="button" onclick="document.getElementById('note-{{ trade.id }}').value=''; this.form.submit();" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-2 py-1.5 rounded text-xs">Fermer sans note</button>
+                                </div>
                             </form>
                             {% else %}
                             <form action="{{ url_for('dashboard.delete_trade', trade_id=trade.id) }}" method="POST" onsubmit="return confirm('Supprimer définitivement ?')" class="inline"><button type="submit" class="text-gray-600 hover:text-red-500 transition p-2 inline-block">

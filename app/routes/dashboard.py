@@ -258,6 +258,12 @@ def journal():
         q = q.filter_by(portfolio_id=filter_pf_id)
     trades = q.order_by(TradeSimulation.entry_date.desc()).all()
 
+    # Infos portefeuilles pour le sélecteur (équité + P&L à côté du nom)
+    pf_info = {}
+    for pf in portfolios:
+        pnl = round(sum(t.pnl_usd for t in pf.trades if t.status == 'closed' and t.pnl_usd), 2)
+        pf_info[pf.id] = {'equity': pf.equity(), 'pnl': pnl}
+
     # 2. Récupérer les prix actuels du marché pour l'affichage "En cours"
     market_status = MarketStatus.query.all()
     # On crée un dictionnaire pour accès rapide : {'BTCUSDT': 65000, 'ETHUSDT': 3500...}
@@ -267,6 +273,7 @@ def journal():
                          trades=trades,
                          current_prices=current_prices,
                          portfolios=portfolios,
+                         pf_info=pf_info,
                          filter_pf_id=filter_pf_id)
 
 
@@ -390,6 +397,7 @@ def close_trade(trade_id):
     if user_note:
         trade.notes = user_note  # dernière note (compat) + historique ci-dessous
     trade.status = 'closed'
+    trade.close_reason = 'MANUAL'  # clôturé par l'utilisateur (vs SL/TP auto)
     trade.close_date = datetime.utcnow()
 
     # P&L direction-aware (C1+C4) : SHORT inversé vs LONG

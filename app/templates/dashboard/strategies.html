@@ -13,48 +13,140 @@
         </nav>
     </aside>
 
-    <div class="flex-1 p-6 space-y-8">
+    <div class="flex-1 p-6 space-y-6">
         <div>
-            <h1 class="text-2xl font-bold text-white mb-2">Bibliothèque de Stratégies</h1>
-            <p class="text-xs text-gray-500 mb-6">Choisie dans le simulateur, la stratégie remplit automatiquement SL/TP — le trade garde son nom pour les stats V2.</p>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {% for st in strategies %}
-                <div class="bg-rwa-card rounded-xl border border-gray-800 p-6">
-                    <div class="flex justify-between items-start mb-2">
-                        <h3 class="text-xl font-bold text-white">{{ st.name }}</h3>
-                        <span class="{{ 'bg-green-900 text-green-200' if st.level=='Débutant' else 'bg-yellow-900 text-yellow-200' }} text-xs px-2 py-1 rounded">{{ st.level }}</span>
-                    </div>
-                    <div class="flex gap-2 mb-3 text-xs font-mono">
-                        <span class="{{ 'text-green-400' if st.side=='LONG' else 'text-red-400' }} font-bold">{{ st.side }}</span>
-                        <span class="text-red-400">SL −{{ st.sl_pct }}%</span>
-                        <span class="text-green-400">TP +{{ st.tp_pct }}%</span>
-                        {% if st.user_id %}<span class="text-rwa-blue">· perso</span>{% else %}<span class="text-gray-500">· système</span>{% endif %}
-                    </div>
-                    <p class="text-gray-400 text-sm">{{ st.description }}</p>
-                </div>
-                {% endfor %}
-            </div>
+            <h1 class="text-2xl font-bold text-white">Bibliothèque de Stratégies</h1>
+            <p class="text-xs text-gray-500 mt-1">Source de référence : le simulateur utilise exactement ces configurations (même stockage, identifiées par id). Une stratégie choisie remplit SL/TP — rien n'est simulé tant que tu ne valides pas.</p>
         </div>
 
+        <div class="flex flex-col md:flex-row gap-2">
+            <input id="st-search" type="text" placeholder="Rechercher (nom, indicateur, règle…)" class="flex-1 bg-gray-800 border border-gray-700 rounded p-2 text-sm text-white outline-none focus:border-rwa-blue">
+            <select id="st-level" class="bg-gray-800 border border-gray-700 rounded p-2 text-sm text-white">
+                <option value="">Tous niveaux</option>
+                <option>Débutant</option>
+                <option>Intermédiaire</option>
+                <option>Avancé</option>
+            </select>
+            <select id="st-side" class="bg-gray-800 border border-gray-700 rounded p-2 text-sm text-white">
+                <option value="">LONG + SHORT</option>
+                <option value="LONG">LONG</option>
+                <option value="SHORT">SHORT</option>
+            </select>
+        </div>
+
+        <div id="st-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {% for st in strategies %}
+            <article class="st-card bg-rwa-card rounded-xl border border-gray-800 hover:border-rwa-blue/50 transition flex flex-col"
+                data-search="{{ (st.name ~ ' ' ~ (st.indicator or '') ~ ' ' ~ (st.description or '') ~ ' ' ~ (st.entry_rules or '') ~ ' ' ~ (st.exit_rules or ''))|lower }}"
+                data-level="{{ st.level }}" data-side="{{ st.side }}">
+                <div class="p-5 pb-3">
+                    <div class="flex justify-between items-start gap-2 mb-2">
+                        <h3 class="text-lg font-bold text-white leading-snug">{{ st.name }}</h3>
+                        <span class="shrink-0 {{ 'bg-green-900 text-green-200' if st.level=='Débutant' else ('bg-yellow-900 text-yellow-200' if st.level=='Intermédiaire' else 'bg-purple-900 text-purple-200') }} text-[11px] px-2 py-0.5 rounded">{{ st.level }}</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 text-[11px] font-mono mb-3">
+                        <span class="font-bold {{ 'text-green-400' if st.side=='LONG' else 'text-red-400' }}">{{ st.side }}</span>
+                        <span class="bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-gray-300">📊 {{ st.indicator or '—' }}</span>
+                        <span class="bg-gray-900 border border-gray-700 rounded px-1.5 py-0.5 text-gray-300">⏱ {{ st.timeframe or '—' }}</span>
+                        <span class="bg-gray-900 border border-red-900/50 rounded px-1.5 py-0.5 text-red-400">SL −{{ st.sl_pct }}%</span>
+                        <span class="bg-gray-900 border border-green-900/50 rounded px-1.5 py-0.5 text-green-400">TP +{{ st.tp_pct }}%</span>
+                        {% if st.user_id %}<span class="text-rwa-blue">· perso</span>{% else %}<span class="text-gray-600">· système</span>{% endif %}
+                    </div>
+                    {% if st.description %}<p class="text-gray-400 text-sm mb-3">{{ st.description }}</p>{% endif %}
+                    <div class="grid grid-cols-1 gap-2 text-xs">
+                        <div class="bg-gray-900/70 border border-gray-700/60 rounded p-2.5">
+                            <div class="text-rwa-blue font-bold mb-1">✅ Entrée</div>
+                            <div class="text-gray-300">{{ st.entry_rules or '— (à définir)' }}</div>
+                        </div>
+                        <div class="bg-gray-900/70 border border-gray-700/60 rounded p-2.5">
+                            <div class="text-rwa-yellow font-bold mb-1">🚪 Sortie</div>
+                            <div class="text-gray-300">{{ st.exit_rules or '— (sortie au TP/SL auto)' }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-2 p-4 pt-2 mt-auto">
+                    <a href="{{ url_for('dashboard.index', strategy_id=st.id) }}" class="flex-1 text-center bg-rwa-blue hover:bg-sky-600 text-white px-3 py-2 rounded text-xs font-bold transition">▶ Utiliser dans le simulateur</a>
+                    {% if st.user_id == current_user.id %}
+                    <button type="button" onclick="document.getElementById('edit-{{ st.id }}').classList.toggle('hidden')" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs">Modifier</button>
+                    <form action="{{ url_for('dashboard.delete_strategy', strategy_id=st.id) }}" method="POST" onsubmit="return confirm('Supprimer cette stratégie ? (les trades déjà taggés gardent son nom)')" class="inline">
+                        <button class="text-gray-600 hover:text-red-500 px-2 py-2 text-xs">Suppr.</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% if st.user_id == current_user.id %}
+                <form id="edit-{{ st.id }}" action="{{ url_for('dashboard.edit_strategy', strategy_id=st.id) }}" method="POST" class="hidden border-t border-gray-800 p-4 grid grid-cols-1 md:grid-cols-2 gap-2 bg-gray-900/40">
+                    <input type="text" name="name" value="{{ st.name }}" maxlength="80" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
+                    <input type="text" name="indicator" value="{{ st.indicator or '' }}" placeholder="Indicateur (ex. RSI, Williams %R…)" maxlength="60" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
+                    <select name="side" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
+                        <option value="LONG" {{ 'selected' if st.side=='LONG' }}>LONG</option>
+                        <option value="SHORT" {{ 'selected' if st.side=='SHORT' }}>SHORT</option>
+                    </select>
+                    <select name="level" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
+                        {% for lv in ['Débutant','Intermédiaire','Avancé'] %}<option {{ 'selected' if st.level==lv }}>{{ lv }}</option>{% endfor %}
+                    </select>
+                    <input type="number" step="any" min="0.1" name="sl_pct" value="{{ st.sl_pct }}" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
+                    <input type="number" step="any" min="0.1" name="tp_pct" value="{{ st.tp_pct }}" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
+                    <input type="text" name="timeframe" value="{{ st.timeframe or '1D' }}" placeholder="Unité (1H/4H/1D)" maxlength="10" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
+                    <input type="text" name="description" value="{{ st.description or '' }}" placeholder="Description" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
+                    <textarea name="entry_rules" rows="2" placeholder="Règles d'entrée" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">{{ st.entry_rules or '' }}</textarea>
+                    <textarea name="exit_rules" rows="2" placeholder="Règles de sortie" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">{{ st.exit_rules or '' }}</textarea>
+                    <button class="md:col-span-2 bg-rwa-blue hover:bg-sky-600 text-white font-bold py-2 rounded text-xs transition">Enregistrer</button>
+                </form>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+        <p id="st-empty" class="hidden text-center text-gray-600 text-sm py-6">Aucune stratégie ne correspond à la recherche.</p>
+
         <div class="bg-rwa-card rounded-xl border border-gray-800 p-6">
-            <h2 class="text-lg font-bold text-white mb-4">Ajouter ma stratégie (V2)</h2>
+            <h2 class="text-lg font-bold text-white mb-1">Ajouter une stratégie</h2>
+            <p class="text-xs text-gray-500 mb-4">Elle apparaîtra aussitôt dans le simulateur. V2 prête pour : Williams %R, Ultimate Oscillator, Breakout, Donchian, Pullback, Mean Reversion, Trend Following, Momentum — via le champ indicateur + règles.</p>
             <form action="{{ url_for('dashboard.strategies') }}" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input type="text" name="name" placeholder="Nom (ex. Breakout 15m)" maxlength="80" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
-                <input type="text" name="description" placeholder="Description / règles d'entrée" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                <input type="text" name="name" placeholder="Nom (ex. Donchian Breakout 4H)" maxlength="80" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                <input type="text" name="indicator" placeholder="Indicateur pivot (ex. Donchian 20, Williams %R 14…)" maxlength="60" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
                 <select name="side" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
                     <option value="LONG">LONG (hausse)</option>
                     <option value="SHORT">SHORT (baisse)</option>
                 </select>
-                <select name="level" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
-                    <option>Débutant</option>
-                    <option>Intermédiaire</option>
-                    <option>Avancé</option>
-                </select>
-                <input type="number" step="any" min="0.1" name="sl_pct" placeholder="SL % (ex. 2)" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
-                <input type="number" step="any" min="0.1" name="tp_pct" placeholder="TP % (ex. 4)" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                <div class="grid grid-cols-3 gap-2">
+                    <select name="level" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                        <option>Débutant</option>
+                        <option>Intermédiaire</option>
+                        <option>Avancé</option>
+                    </select>
+                    <input type="number" step="any" min="0.1" name="sl_pct" placeholder="SL %" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                    <input type="number" step="any" min="0.1" name="tp_pct" placeholder="TP %" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                </div>
+                <input type="text" name="timeframe" placeholder="Unité de temps (1H / 4H / 1D)" maxlength="10" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                <input type="text" name="description" placeholder="Description courte" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                <textarea name="entry_rules" rows="2" placeholder="Règles d'entrée (conditions précises)" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm"></textarea>
+                <textarea name="exit_rules" rows="2" placeholder="Règles de sortie (TP/SL, invalidation…)" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm"></textarea>
                 <button class="md:col-span-2 bg-rwa-blue hover:bg-sky-600 text-white font-bold py-2 rounded transition">Ajouter — utilisable aussitôt dans le simulateur</button>
             </form>
         </div>
     </div>
 </div>
+
+<script>
+(function(){
+    const q = document.getElementById('st-search');
+    const lv = document.getElementById('st-level');
+    const sd = document.getElementById('st-side');
+    const cards = Array.from(document.querySelectorAll('.st-card'));
+    const empty = document.getElementById('st-empty');
+    function apply() {
+        const needle = (q.value || '').toLowerCase().trim();
+        let shown = 0;
+        cards.forEach(c => {
+            const ok = (!needle || c.dataset.search.includes(needle))
+                && (!lv.value || c.dataset.level === lv.value)
+                && (!sd.value || c.dataset.side === sd.value);
+            c.style.display = ok ? '' : 'none';
+            if (ok) shown++;
+        });
+        empty.classList.toggle('hidden', shown > 0);
+    }
+    [q, lv, sd].forEach(el => el.addEventListener('input', apply));
+})();
+</script>
 {% endblock %}

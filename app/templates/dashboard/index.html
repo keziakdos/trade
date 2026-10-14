@@ -162,11 +162,12 @@
                                 <select id="strategy-select" name="strategy_id" title="Choisir une stratégie pour remplir SL/TP" class="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm focus:border-rwa-blue outline-none truncate">
                                     <option value="">Manuelle (libre)</option>
                                     {% for st in strategies %}
-                                    <option value="{{ st.id }}" data-side="{{ st.side }}" data-sl="{{ st.sl_pct }}" data-tp="{{ st.tp_pct }}" title="{{ st.name }} ({{ st.side }} −{{ st.sl_pct }}% / +{{ st.tp_pct }}%)">{{ st.name }}</option>
+                                    <option value="{{ st.id }}" {% if selected_strategy_id==st.id %}selected{% endif %} data-side="{{ st.side }}" data-sl="{{ st.sl_pct }}" data-tp="{{ st.tp_pct }}" data-name="{{ st.name }}" data-ind="{{ st.indicator or '' }}" title="{{ st.name }} ({{ st.side }} −{{ st.sl_pct }}% / +{{ st.tp_pct }}%)">{{ st.name }}</option>
                                     {% endfor %}
                                 </select>
                                 <button type="button" id="strategy-apply" class="shrink-0 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs font-bold whitespace-nowrap">Appliquer</button>
                             </div>
+                            <div id="strategy-info" class="text-[11px] text-gray-500 mt-1">Mode manuel : SL/TP libres. Choisir une stratégie charge sa config (rien n'est simulé avant validation).</div>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
@@ -472,6 +473,24 @@
     setTimeout(updateCapitalHint, 500);
 
     // 7. Stratégie → SL/TP déduits de l'entrée (aligné page Stratégies, ajout V2)
+    // Config chargée ≠ simulation exécutée : rien ne part avant "Valider la Simulation".
+    function strategyInfo() {
+        const sel = document.getElementById('strategy-select');
+        const box = document.getElementById('strategy-info');
+        if (!sel.value || !sel.selectedOptions.length) {
+            box.textContent = 'Mode manuel : SL/TP libres. Choisir une stratégie charge sa config (rien n\u2019est simulé avant validation).';
+            return null;
+        }
+        const opt = sel.selectedOptions[0];
+        box.innerHTML = 'Config chargée : <span class="text-white font-bold"></span> ' +
+            '<span class="font-mono">(' + opt.dataset.side + ' −' + opt.dataset.sl + '% / +' + opt.dataset.tp + '%)</span>' +
+            (opt.dataset.ind ? ' <span class="text-gray-600">📊 ' + opt.dataset.ind + '</span>' : '') +
+            ' — clique Appliquer pour remplir SL/TP.';
+        box.querySelector('span').textContent = opt.dataset.name;
+        return opt;
+    }
+    document.getElementById('strategy-select').addEventListener('change', strategyInfo);
+    setTimeout(strategyInfo, 500);
     document.getElementById('strategy-apply').addEventListener('click', () => {
         const sel = document.getElementById('strategy-select');
         if (!sel.value || !sel.selectedOptions.length) return;

@@ -23,15 +23,32 @@ def get_available_strategies():
     if Strategy.query.filter_by(user_id=None).count() == 0:
         db.session.add_all([
             Strategy(user_id=None, name='Suivi de Tendance (Trend Following)', level='Débutant',
-                     side='LONG', sl_pct=2.0, tp_pct=4.0,
-                     description="The Trend is your Friend : on ne trade jamais contre le courant dominant. Entrée sur repli vers support, prix au-dessus de la MA200, RSI pas en surachat (>70), bougie verte engloutissante."),
+                     side='LONG', sl_pct=2.0, tp_pct=4.0, indicator='MA200 + RSI', timeframe='1D',
+                     entry_rules="Prix au-dessus de la MA200. Repli vers support. RSI < 70. Bougie verte engloutissante.",
+                     exit_rules="Sortie au TP (+4%). Stop sous le support (−2%). Ne pas déplacer le stop.",
+                     description="The Trend is your Friend : on ne trade jamais contre le courant dominant."),
             Strategy(user_id=None, name='Breakout (Cassure)', level='Intermédiaire',
-                     side='LONG', sl_pct=3.0, tp_pct=6.0,
-                     description="Explosion de prix après compression (range). Entrée sur cassure franche avec VOLUME. Ne jamais acheter après +5% en une bougie (trop tard)."),
+                     side='LONG', sl_pct=3.0, tp_pct=6.0, indicator='Volume + Range', timeframe='4H',
+                     entry_rules="Prix bloqué sous résistance. Bougies qui se compriment. Cassure franche avec VOLUME. Jamais après +5% en une bougie.",
+                     exit_rules="Sortie au TP (+6%). Stop sous la résistance cassée (−3%). Faux départ = on sort, on ne moyenne pas.",
+                     description="Explosion de prix après compression (range). Gain rapide, risque de faux départ."),
             Strategy(user_id=None, name='Rejet de Résistance (Range Short)', level='Intermédiaire',
-                     side='SHORT', sl_pct=2.0, tp_pct=4.0,
-                     description="Vente sur rejet d'une résistance en range : prix bloqué sous résistance, mèche haute de rejet, retour vers le bas du range."),
+                     side='SHORT', sl_pct=2.0, tp_pct=4.0, indicator='RSI + Résistance', timeframe='4H',
+                     entry_rules="Prix bloqué sous une résistance en range. Mèche haute de rejet. RSI qui se retourne.",
+                     exit_rules="Sortie au TP (−4%). Stop au-dessus de la résistance (+2%).",
+                     description="Vente sur rejet d'une résistance en range, retour vers le bas du range."),
         ])
+        db.session.commit()
+    else:
+        # Backfill règles sur seeds déjà existants (sans toucher aux ids)
+        for st, er, xr, ind, tf in [
+            ('Suivi de Tendance (Trend Following)', "Prix au-dessus de la MA200. Repli vers support. RSI < 70. Bougie verte engloutissante.", "Sortie au TP (+4%). Stop sous le support (−2%). Ne pas déplacer le stop.", 'MA200 + RSI', '1D'),
+            ('Breakout (Cassure)', "Prix bloqué sous résistance. Bougies qui se compriment. Cassure franche avec VOLUME. Jamais après +5% en une bougie.", "Sortie au TP (+6%). Stop sous la résistance cassée (−3%). Faux départ = on sort.", 'Volume + Range', '4H'),
+            ('Rejet de Résistance (Range Short)', "Prix bloqué sous une résistance en range. Mèche haute de rejet. RSI qui se retourne.", "Sortie au TP (−4%). Stop au-dessus de la résistance (+2%).", 'RSI + Résistance', '4H'),
+        ]:
+            row = Strategy.query.filter_by(user_id=None, name=st).first()
+            if row and not row.entry_rules:
+                row.entry_rules, row.exit_rules, row.indicator, row.timeframe = er, xr, ind, tf
         db.session.commit()
     return Strategy.query.filter((Strategy.user_id == None) | (Strategy.user_id == current_user.id)).order_by(Strategy.id).all()
 
@@ -71,13 +88,20 @@ def index():
     btc_data = MarketStatus.query.filter_by(symbol='BTCUSDT').first()
     current_btc_price = btc_data.price if btc_data else 0
 
+    # Pré-sélection stratégie via ?strategy_id= (depuis page Stratégies → Utiliser)
+    try:
+        selected_strategy_id = int(request.args.get('strategy_id') or 0) or None
+    except (TypeError, ValueError):
+        selected_strategy_id = None
+
     return render_template('dashboard/index.html',
                          market_data=market_data,
                          recent_trades=recent_trades,
                          btc_price=current_btc_price,
                          portfolios=portfolios,
                          pf_stats=pf_stats,
-                         strategies=get_available_strategies())
+                         strategies=get_available_strategies(),
+                         selected_strategy_id=selected_strategy_id)
 
 
 @dashboard_bp.route('/portfolios', methods=['POST'])
@@ -388,16 +412,66 @@ def strategies():
         except (TypeError, ValueError):
             sl, tp = 0, 0
         desc = (request.form.get('description') or '').strip()
+        indicator = (request.form.get('indicator') or 'RSI + MA200').strip()[:60]
+        timeframe = request.form.get('timeframe') or '1D'
+        entry_rules = (request.form.get('entry_rules') or '').strip()
+        exit_rules = (request.form.get('exit_rules') or '').strip()
         if not name or sl <= 0 or tp <= 0 or side not in ('LONG', 'SHORT'):
             flash("Stratégie invalide : nom + sens + SL/TP % positifs requis.", "error")
         else:
             db.session.add(Strategy(user_id=current_user.id, name=name, level=level,
-                                    side=side, sl_pct=sl, tp_pct=tp, description=desc))
+                                    side=side, sl_pct=sl, tp_pct=tp, description=desc,
+                                    indicator=indicator, timeframe=timeframe,
+                                    entry_rules=entry_rules, exit_rules=exit_rules))
             db.session.commit()
             flash(f"Stratégie '{name}' ajoutée — utilisable dans le simulateur.", "success")
         return redirect(url_for('dashboard.strategies'))
     strategies = get_available_strategies()
     return render_template('dashboard/strategies.html', strategies=strategies)
+
+
+@dashboard_bp.route('/strategy/<int:strategy_id>/edit', methods=['POST'])
+@login_required
+def edit_strategy(strategy_id):
+    """Modifie une stratégie perso (système = lecture seule). Le simulateur recharge à la prochaine ouverture."""
+    st = Strategy.query.get_or_404(strategy_id)
+    if st.user_id != current_user.id:
+        abort(403)
+    name = (request.form.get('name') or '').strip()[:80]
+    try:
+        sl = float(request.form.get('sl_pct') or 0)
+        tp = float(request.form.get('tp_pct') or 0)
+    except (TypeError, ValueError):
+        sl, tp = 0, 0
+    if not name or sl <= 0 or tp <= 0:
+        flash("Modification invalide : nom + SL/TP % positifs requis.", "error")
+    else:
+        st.name = name
+        st.level = request.form.get('level') or st.level
+        if request.form.get('side') in ('LONG', 'SHORT'):
+            st.side = request.form.get('side')
+        st.sl_pct, st.tp_pct = sl, tp
+        st.indicator = (request.form.get('indicator') or st.indicator or '').strip()[:60]
+        st.timeframe = request.form.get('timeframe') or st.timeframe
+        st.entry_rules = (request.form.get('entry_rules') or '').strip()
+        st.exit_rules = (request.form.get('exit_rules') or '').strip()
+        st.description = (request.form.get('description') or '').strip()
+        db.session.commit()
+        flash(f"Stratégie '{name}' mise à jour.", "success")
+    return redirect(url_for('dashboard.strategies'))
+
+
+@dashboard_bp.route('/strategy/<int:strategy_id>/delete', methods=['POST'])
+@login_required
+def delete_strategy(strategy_id):
+    """Supprime une stratégie perso (jamais celles du système). Les trades déjà taggés gardent leur nom."""
+    st = Strategy.query.get_or_404(strategy_id)
+    if st.user_id != current_user.id:
+        abort(403)
+    db.session.delete(st)
+    db.session.commit()
+    flash(f"Stratégie '{st.name}' supprimée.", "success")
+    return redirect(url_for('dashboard.strategies'))
 
 
 

@@ -33,7 +33,9 @@
                 {% endfor %}
             </select>
         </form>
-        <p class="text-xs text-gray-500 mb-6">LONG = pari hausse | SHORT = pari baisse. P&amp;L live recalculé côté serveur au refresh, et en direct via WebSocket pour les cryptos.</p>{% macro jrow(trade) %}
+        <p class="text-xs text-gray-500 mb-6">LONG = pari hausse | SHORT = pari baisse. P&amp;L live recalculé côté serveur au refresh, et en direct via WebSocket pour les cryptos.
+            {% if archived_count %}{% if show_archived %}<a href="{{ url_for('dashboard.journal') }}" class="text-rwa-blue hover:underline">Masquer les archivés</a>{% else %}<a href="{{ url_for('dashboard.journal', show_archived=1) }}" class="text-rwa-blue hover:underline">Afficher les {{ archived_count }} archivé(s)</a>{% endif %}{% endif %}
+        </p>{% macro jrow(trade) %}
                     {% set dir = trade.direction or 'LONG' %}
                     {% set sign = 1 if dir == 'LONG' else -1 %}
                     <tr class="hover:bg-gray-800/50 transition align-top" data-symbol="{{ trade.symbol }}" data-entry="{{ trade.entry_price }}" data-capital="{{ trade.position_size_usd }}" data-dir="{{ dir }}">
@@ -119,7 +121,20 @@
                                 </div>
                             </form>
                             {% else %}
-                            <form action="{{ url_for('dashboard.delete_trade', trade_id=trade.id) }}" method="POST" onsubmit="return confirm('Supprimer définitivement ?')" class="inline"><button type="submit" class="text-gray-600 hover:text-red-500 transition p-2 inline-block">
+                            {% if trade.archived %}
+                            <div class="flex flex-col gap-2 items-end">
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-700 text-gray-300">📦 Archivé</span>
+                                <form action="{{ url_for('dashboard.unarchive_trade', trade_id=trade.id) }}" method="POST" class="inline">
+                                    <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs">Restaurer</button>
+                                </form>
+                            </div>
+                            {% else %}
+                            <form action="{{ url_for('dashboard.archive_trade', trade_id=trade.id) }}" method="POST" class="flex flex-col gap-2 items-end bg-gray-900/40 border border-gray-700/60 rounded-lg p-2">
+                                <input type="text" name="final_note" placeholder="Note finale (optionnel) : leçon ?" maxlength="500" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white">
+                                <button type="submit" class="w-full bg-gray-700 hover:bg-gray-600 text-white px-2 py-1.5 rounded text-xs font-bold" title="Cache du journal, garde l'historique et le P&L">📦 Archiver définitivement</button>
+                            </form>
+                            {% endif %}
+                            <form action="{{ url_for('dashboard.delete_trade', trade_id=trade.id) }}" method="POST" onsubmit="return confirm('Supprimer définitivement ? (efface aussi les notes et le P&L)')" class="inline"><button type="submit" title="Supprimer définitivement (efface tout)" class="text-gray-600 hover:text-red-500 transition p-2 inline-block">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button></form>
                             {% endif %}

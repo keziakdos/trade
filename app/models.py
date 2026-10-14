@@ -74,6 +74,7 @@ class TradeSimulation(db.Model):
     
     status = db.Column(db.String(20), default='open') # open, closed
     close_reason = db.Column(db.String(10), nullable=True) # MANUAL (utilisateur), SL, TP (auto)
+    archived = db.Column(db.Boolean, default=False) # fermé définitivement : caché du journal, historique + P&L gardés
 
     exit_price = db.Column(db.Float, nullable=True) # Prix de sortie
     outcome = db.Column(db.String(10), nullable=True) # WIN ou LOSS

@@ -256,7 +256,12 @@ def journal():
     q = TradeSimulation.query.filter_by(user_id=current_user.id)
     if filter_pf_id:
         q = q.filter_by(portfolio_id=filter_pf_id)
+    # Archivés cachés par défaut (?show_archived=1 pour les revoir)
+    show_archived = request.args.get('show_archived') == '1'
+    if not show_archived:
+        q = q.filter((TradeSimulation.archived == False) | (TradeSimulation.archived == None))
     trades = q.order_by(TradeSimulation.entry_date.desc()).all()
+    archived_count = TradeSimulation.query.filter_by(user_id=current_user.id, archived=True).count()
 
     # Infos portefeuilles pour le sélecteur (équité + P&L à côté du nom)
     pf_info = {}
@@ -274,7 +279,41 @@ def journal():
                          current_prices=current_prices,
                          portfolios=portfolios,
                          pf_info=pf_info,
-                         filter_pf_id=filter_pf_id)
+                         filter_pf_id=filter_pf_id,
+                         show_archived=show_archived,
+                         archived_count=archived_count)
+
+
+@dashboard_bp.route('/trade/archive/<int:trade_id>', methods=['POST'])
+@login_required
+def archive_trade(trade_id):
+    """Ferme définitivement : trade archivé (caché, historique + P&L conservés)."""
+    trade = TradeSimulation.query.get_or_404(trade_id)
+    if trade.user_id != current_user.id:
+        abort(403)
+    if trade.status != 'closed':
+        flash("On n'archive qu'un trade déjà clôturé.", "error")
+        return redirect(url_for('dashboard.journal'))
+    final_note = (request.form.get('final_note') or '').strip()
+    if final_note:
+        db.session.add(TradeNote(trade_id=trade.id, user_id=current_user.id, content=final_note))
+        trade.notes = final_note
+    trade.archived = True
+    db.session.commit()
+    flash("Trade archivé définitivement (historique et P&L conservés).", "success")
+    return redirect(url_for('dashboard.journal'))
+
+
+@dashboard_bp.route('/trade/unarchive/<int:trade_id>', methods=['POST'])
+@login_required
+def unarchive_trade(trade_id):
+    trade = TradeSimulation.query.get_or_404(trade_id)
+    if trade.user_id != current_user.id:
+        abort(403)
+    trade.archived = False
+    db.session.commit()
+    flash("Trade restauré dans le journal.", "success")
+    return redirect(url_for('dashboard.journal', show_archived=1))
 
 
 

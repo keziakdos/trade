@@ -126,55 +126,83 @@ def create_portfolio():
 
 
 
+YAHOO_MAP = {'GOLD': 'GC=F', 'EURUSD': 'EURUSD=X', 'SP500': '^GSPC', 'IXIC': '^IXIC', 'SPY': 'SPY', 'AAPL': 'AAPL', 'MSFT': 'MSFT'}
+
+
+def _fetch_bars(symbol, limit=250):
+    """Bougies OHLCV réutilisées par le graphique ET le moteur V2 (mêmes données de marché)."""
+    market = MarketStatus.query.filter_by(symbol=symbol).first()
+    source = (market.source if market and market.source else 'binance')
+    bars = []
+    if source == 'yahoo':
+        import yfinance as yf
+        ticker = YAHOO_MAP.get(symbol, symbol)
+        df = yf.download(ticker, period='1y', interval='1d', progress=False, auto_adjust=True)
+        if df is None or len(df) == 0:
+            raise ValueError('Aucune donnée Yahoo')
+        try:
+            df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+        except Exception:
+            pass
+        for idx, row in df.tail(limit).iterrows():
+            try:
+                ts = int(idx.timestamp())
+            except Exception:
+                continue
+            o = float(row.get('Open', float('nan')))
+            h = float(row.get('High', float('nan')))
+            l = float(row.get('Low', float('nan')))
+            c = float(row.get('Close', float('nan')))
+            v = float(row.get('Volume', 0) or 0)
+            if any(vv != vv for vv in [o, h, l, c]):  # NaN
+                continue
+            bars.append({'time': ts, 'open': o, 'high': h, 'low': l, 'close': c, 'volume': v})
+    else:
+        binance_symbol = symbol.replace('USDT', '/USDT')
+        exchange = ccxt.binance()
+        ohlcv = exchange.fetch_ohlcv(binance_symbol, timeframe='1d', limit=limit)
+        for candle in ohlcv:
+            bars.append({
+                'time': int(candle[0] / 1000),
+                'open': candle[1], 'high': candle[2],
+                'low': candle[3], 'close': candle[4], 'volume': candle[5] or 0,
+            })
+    if not bars:
+        raise ValueError('Aucune bougie')
+    return bars
+
+
 @dashboard_bp.route('/api/history/<symbol>')
 @login_required
 def get_history(symbol):
     """Récupère l'historique OHLCV (Binance pour crypto, Yahoo pour Gold/Forex/Indices)."""
     try:
-        market = MarketStatus.query.filter_by(symbol=symbol).first()
-        source = (market.source if market and market.source else 'binance')
-
-        data = []
-        current_price = None
-        if source == 'yahoo':
-            import yfinance as yf
-            yahoo_map = {'GOLD': 'GC=F', 'EURUSD': 'EURUSD=X', 'SP500': '^GSPC', 'IXIC': '^IXIC', 'SPY': 'SPY', 'AAPL': 'AAPL', 'MSFT': 'MSFT'}
-            ticker = yahoo_map.get(symbol, symbol)
-            df = yf.download(ticker, period='6mo', interval='1d', progress=False, auto_adjust=True)
-            if df is None or len(df) == 0:
-                return jsonify({'success': False, 'error': 'Aucune donnée Yahoo'})
-            # aplatir colonnes multi-index éventuelles
-            try:
-                df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
-            except Exception:
-                pass
-            for idx, row in df.iterrows():
-                try:
-                    ts = int(idx.timestamp())
-                except Exception:
-                    continue
-                o = float(row.get('Open', float('nan')))
-                h = float(row.get('High', float('nan')))
-                l = float(row.get('Low', float('nan')))
-                c = float(row.get('Close', float('nan')))
-                if any(v != v for v in [o, h, l, c]):  # NaN
-                    continue
-                data.append({'time': ts, 'open': o, 'high': h, 'low': l, 'close': c})
-            current_price = data[-1]['close'] if data else None
-        else:
-            binance_symbol = symbol.replace('USDT', '/USDT')
-            exchange = ccxt.binance()
-            ohlcv = exchange.fetch_ohlcv(binance_symbol, timeframe='1d', limit=100)
-            for candle in ohlcv:
-                data.append({
-                    'time': int(candle[0] / 1000),
-                    'open': candle[1], 'high': candle[2],
-                    'low': candle[3], 'close': candle[4]
-                })
-            current_price = data[-1]['close'] if data else None
-
+        bars = _fetch_bars(symbol, limit=100)
+        data = [{'time': b['time'], 'open': b['open'], 'high': b['high'],
+                 'low': b['low'], 'close': b['close']} for b in bars]
+        current_price = data[-1]['close'] if data else None
         return jsonify({'success': True, 'data': data, 'current_price': current_price})
 
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@dashboard_bp.route('/api/strategy/evaluate/<engine_id>/<symbol>')
+@login_required
+def api_strategy_evaluate(engine_id, symbol):
+    """Lecture marché via le moteur V2 (données réelles, PAS un résultat de simulation)."""
+    try:
+        from app.strategies import evaluate as engine_evaluate, REGISTRY
+        if engine_id not in REGISTRY:
+            return jsonify({'success': False, 'error': f"moteur inconnu : {engine_id}"})
+        bars = _fetch_bars(symbol)
+        res = engine_evaluate(engine_id, bars)
+        # Réponse allégée : pas les séries complètes, que l'état et les scalaires.
+        scalars = {k: v for k, v in res.get('values', {}).items() if isinstance(v, (int, float)) or v is None}
+        out = dict(res)
+        out['values'] = scalars
+        out['detail'] = {k: v for k, v in res.items() if k in ('direction', 'scenario', 'force', 'confirmed', 'score', 'parts', 'coverage', 'warning', 'conditions')}
+        return jsonify({'success': True, 'result': out})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -416,18 +444,25 @@ def strategies():
         timeframe = request.form.get('timeframe') or '1D'
         entry_rules = (request.form.get('entry_rules') or '').strip()
         exit_rules = (request.form.get('exit_rules') or '').strip()
+        engine_id = (request.form.get('engine_id') or '').strip() or None
+        from app.strategies import REGISTRY as _REG
+        if engine_id is not None and engine_id not in _REG:
+            engine_id = None
         if not name or sl <= 0 or tp <= 0 or side not in ('LONG', 'SHORT'):
             flash("Stratégie invalide : nom + sens + SL/TP % positifs requis.", "error")
         else:
             db.session.add(Strategy(user_id=current_user.id, name=name, level=level,
                                     side=side, sl_pct=sl, tp_pct=tp, description=desc,
                                     indicator=indicator, timeframe=timeframe,
-                                    entry_rules=entry_rules, exit_rules=exit_rules))
+                                    entry_rules=entry_rules, exit_rules=exit_rules,
+                                    engine_id=engine_id))
             db.session.commit()
             flash(f"Stratégie '{name}' ajoutée — utilisable dans le simulateur.", "success")
         return redirect(url_for('dashboard.strategies'))
     strategies = get_available_strategies()
-    return render_template('dashboard/strategies.html', strategies=strategies)
+    from app.strategies import REGISTRY as _REGISTRY
+    engines = [{'id': e['id'], 'label': e['label'], 'kind': e['kind']} for e in _REGISTRY.values()]
+    return render_template('dashboard/strategies.html', strategies=strategies, engines=engines)
 
 
 @dashboard_bp.route('/strategy/<int:strategy_id>/edit', methods=['POST'])
@@ -456,6 +491,9 @@ def edit_strategy(strategy_id):
         st.entry_rules = (request.form.get('entry_rules') or '').strip()
         st.exit_rules = (request.form.get('exit_rules') or '').strip()
         st.description = (request.form.get('description') or '').strip()
+        engine_id = (request.form.get('engine_id') or '').strip() or None
+        from app.strategies import REGISTRY as _REG2
+        st.engine_id = engine_id if (engine_id is None or engine_id in _REG2) else st.engine_id
         db.session.commit()
         flash(f"Stratégie '{name}' mise à jour.", "success")
     return redirect(url_for('dashboard.strategies'))

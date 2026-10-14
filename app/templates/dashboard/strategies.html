@@ -51,6 +51,7 @@
                         <span class="bg-gray-900 border border-red-900/50 rounded px-1.5 py-0.5 text-red-400">SL −{{ st.sl_pct }}%</span>
                         <span class="bg-gray-900 border border-green-900/50 rounded px-1.5 py-0.5 text-green-400">TP +{{ st.tp_pct }}%</span>
                         {% if st.user_id %}<span class="text-rwa-blue">· perso</span>{% else %}<span class="text-gray-600">· système</span>{% endif %}
+                        {% if st.engine_id %}<span class="bg-cyan-900 text-cyan-200 rounded px-1.5 py-0.5" title="Module moteur V2">⚙ {{ st.engine_id }}</span>{% endif %}
                     </div>
                     {% if st.description %}<p class="text-gray-400 text-sm mb-3">{{ st.description }}</p>{% endif %}
                     <div class="grid grid-cols-1 gap-2 text-xs">
@@ -77,6 +78,12 @@
                 <form id="edit-{{ st.id }}" action="{{ url_for('dashboard.edit_strategy', strategy_id=st.id) }}" method="POST" class="hidden border-t border-gray-800 p-4 grid grid-cols-1 md:grid-cols-2 gap-2 bg-gray-900/40">
                     <input type="text" name="name" value="{{ st.name }}" maxlength="80" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
                     <input type="text" name="indicator" value="{{ st.indicator or '' }}" placeholder="Indicateur (ex. RSI, Williams %R…)" maxlength="60" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
+                    <select name="engine_id" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
+                        <option value="">Moteur V2 : aucun</option>
+                        {% for en in engines %}
+                        <option value="{{ en.id }}" {{ 'selected' if st.engine_id==en.id }}>{{ en.id }} — {{ en.label }}</option>
+                        {% endfor %}
+                    </select>
                     <select name="side" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-xs">
                         <option value="LONG" {{ 'selected' if st.side=='LONG' }}>LONG</option>
                         <option value="SHORT" {{ 'selected' if st.side=='SHORT' }}>SHORT</option>
@@ -104,6 +111,12 @@
             <form action="{{ url_for('dashboard.strategies') }}" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <input type="text" name="name" placeholder="Nom (ex. Donchian Breakout 4H)" maxlength="80" required class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
                 <input type="text" name="indicator" placeholder="Indicateur pivot (ex. Donchian 20, Williams %R 14…)" maxlength="60" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
+                <select name="engine_id" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm" title="Module moteur V2 (optionnel)">
+                    <option value="">Moteur V2 : aucun (SL/TP manuels)</option>
+                    {% for en in engines %}
+                    <option value="{{ en.id }}">⚙ {{ en.id }} — {{ en.label }} ({{ en.kind }})</option>
+                    {% endfor %}
+                </select>
                 <select name="side" class="bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm">
                     <option value="LONG">LONG (hausse)</option>
                     <option value="SHORT">SHORT (baisse)</option>

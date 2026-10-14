@@ -162,12 +162,13 @@
                                 <select id="strategy-select" name="strategy_id" title="Choisir une stratégie pour remplir SL/TP" class="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded p-2 text-white text-sm focus:border-rwa-blue outline-none truncate">
                                     <option value="">Manuelle (libre)</option>
                                     {% for st in strategies %}
-                                    <option value="{{ st.id }}" {% if selected_strategy_id==st.id %}selected{% endif %} data-side="{{ st.side }}" data-sl="{{ st.sl_pct }}" data-tp="{{ st.tp_pct }}" data-name="{{ st.name }}" data-ind="{{ st.indicator or '' }}" title="{{ st.name }} ({{ st.side }} −{{ st.sl_pct }}% / +{{ st.tp_pct }}%)">{{ st.name }}</option>
+                                    <option value="{{ st.id }}" {% if selected_strategy_id==st.id %}selected{% endif %} data-side="{{ st.side }}" data-sl="{{ st.sl_pct }}" data-tp="{{ st.tp_pct }}" data-name="{{ st.name }}" data-ind="{{ st.indicator or '' }}" data-engine="{{ st.engine_id or '' }}" title="{{ st.name }} ({{ st.side }} −{{ st.sl_pct }}% / +{{ st.tp_pct }}%)">{{ st.name }}</option>
                                     {% endfor %}
                                 </select>
                                 <button type="button" id="strategy-apply" class="shrink-0 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs font-bold whitespace-nowrap">Appliquer</button>
                             </div>
                             <div id="strategy-info" class="text-[11px] text-gray-500 mt-1">Mode manuel : SL/TP libres. Choisir une stratégie charge sa config (rien n'est simulé avant validation).</div>
+                            <div id="engine-readout" class="hidden text-[11px] mt-1 bg-cyan-950/40 border border-cyan-900 rounded p-2 text-cyan-200"></div>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
@@ -293,6 +294,7 @@
                     
                     // On lance le Live
                     connectLivePrice(symbol, candleSeries);
+                    try { refreshEngineReadout(); } catch(e) {}
                 } else {
                     document.getElementById('chart-title').innerText = symbol + ' — données indisponibles (' + (res.error || 'erreur') + ')';
                 }
@@ -489,7 +491,7 @@
         box.querySelector('span').textContent = opt.dataset.name;
         return opt;
     }
-    document.getElementById('strategy-select').addEventListener('change', strategyInfo);
+    document.getElementById('strategy-select').addEventListener('change', () => { strategyInfo(); refreshEngineReadout(); });
     setTimeout(strategyInfo, 500);
     document.getElementById('strategy-apply').addEventListener('click', () => {
         const sel = document.getElementById('strategy-select');
@@ -509,6 +511,39 @@
         else { document.getElementById('sl-input').value = r2(e * (1 - slPct/100)); document.getElementById('tp-input').value = r2(e * (1 + tpPct/100)); }
         updateSimPreview();
     });
+
+    // 8. Lecture marché moteur V2 : état réel de l'actif via la stratégie liée.
+    // Ce N'EST PAS un résultat de simulation : simple lecture des données de marché.
+    let engineTimer = null;
+    async function refreshEngineReadout() {
+        const box = document.getElementById('engine-readout');
+        const sel = document.getElementById('strategy-select');
+        const symSel = document.getElementById('symbol-select');
+        const opt = sel && sel.selectedOptions.length ? sel.selectedOptions[0] : null;
+        const engine = opt ? (opt.dataset.engine || '') : '';
+        const symbol = symSel ? symSel.value : '';
+        if (!engine || !symbol) { box.classList.add('hidden'); box.textContent = ''; return; }
+        box.classList.remove('hidden');
+        box.textContent = 'Lecture marché (' + engine + ') sur ' + symbol + '…';
+        if (engineTimer) clearTimeout(engineTimer);
+        engineTimer = setTimeout(async () => {
+            try {
+                const res = await (await fetch('/api/strategy/evaluate/' + engine + '/' + symbol)).json();
+                if (!res.success) { box.textContent = 'Lecture marché indisponible : ' + (res.error || 'erreur'); return; }
+                const r = res.result, d = r.detail || {}, v = r.values || {};
+                const bits = ['◉ ' + engine + ' → ' + r.state_label];
+                if (d.direction) bits.push('direction ' + d.direction);
+                if (d.scenario) bits.push('scénario ' + d.scenario);
+                if (d.force) bits.push('force ' + d.force);
+                if (typeof d.score === 'number') bits.push('score ' + d.score.toFixed(1));
+                if (d.confirmed === true) bits.push('confirmé ✓'); else if (d.confirmed === false) bits.push('non confirmé');
+                if (d.warning) bits.push('⚠ ' + d.warning);
+                Object.keys(v).forEach(k => { if (typeof v[k] === 'number') bits.push(k + ' ' + (Math.round(v[k]*100)/100)); });
+                box.innerHTML = bits.join(' · ') + '<div class="text-cyan-200/60 mt-0.5">Données réelles de marché — pas un résultat de simulation.</div>';
+            } catch(e) { box.textContent = 'Lecture marché indisponible (réseau).'; }
+        }, 400);
+    }
+    setTimeout(refreshEngineReadout, 1200);
 </script>
 
 

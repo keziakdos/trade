@@ -120,6 +120,7 @@ class Strategy(db.Model):
     sl_pct = db.Column(db.Float, nullable=False, default=2.0) # % stop loss
     tp_pct = db.Column(db.Float, nullable=False, default=4.0) # % take profit
     indicator = db.Column(db.String(60), nullable=True, default='RSI + MA200') # indicateur pivot (extensible V2 : Williams %R, Donchian...)
+    engine_id = db.Column(db.String(40), nullable=True) # id registre moteur V2 (ex. williams_r_entry_v1), NULL = manuelle/sans moteur
     timeframe = db.Column(db.String(10), nullable=True, default='1D') # 1H / 4H / 1D
     entry_rules = db.Column(db.Text, nullable=True) # règles d'entrée
     exit_rules = db.Column(db.Text, nullable=True) # règles de sortie
